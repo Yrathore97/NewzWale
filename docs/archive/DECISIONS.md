@@ -1,3 +1,34 @@
+> # ⚠️ ARCHIVED — SUPERSEDED, DO NOT USE AS A SOURCE OF TRUTH
+>
+> **Archived:** 2026-08-08 · **Moved from:** repository root (`DECISIONS.md`)
+>
+> This document describes a **pre-rebuild architecture that no longer exists**.
+> It references Sarvam AI voice synthesis, an `/admin` operations desk, a
+> grounded fact-check chat, and a FastAPI + PostgreSQL backend. **None of these
+> are present in the codebase**, and several were deliberately deleted during
+> the rebuild (see `PROGRESS.md`, "What's built").
+>
+> It is retained only as project history — the reasoning behind decisions that
+> were later reversed is worth preserving. It is **not** a description of the
+> current or target system.
+>
+> ## Current sources of truth
+>
+> | Topic | Document |
+> |---|---|
+> | Repository audit and findings | [`docs/NEWZWALE_AUDIT.md`](../NEWZWALE_AUDIT.md) |
+> | Target architecture | [`docs/NEWZWALE_ARCHITECTURE.md`](../NEWZWALE_ARCHITECTURE.md) |
+> | Product specification | [`docs/NEWZWALE_PRODUCT_SPEC.md`](../NEWZWALE_PRODUCT_SPEC.md) |
+> | Fact-check engine | [`docs/NEWZWALE_FACTCHECK_SPEC.md`](../NEWZWALE_FACTCHECK_SPEC.md) |
+> | UI / UX specification | [`docs/NEWZWALE_UI_UX_SPEC.md`](../NEWZWALE_UI_UX_SPEC.md) |
+> | Design direction (approval gate) | [`docs/NEWZWALE_DESIGN_DIRECTION.md`](../NEWZWALE_DESIGN_DIRECTION.md) |
+> | Security findings | [`docs/NEWZWALE_SECURITY_AUDIT.md`](../NEWZWALE_SECURITY_AUDIT.md) |
+> | Implementation plan | [`docs/NEWZWALE_IMPLEMENTATION_PLAN.md`](../NEWZWALE_IMPLEMENTATION_PLAN.md) |
+> | Design tokens | [`DESIGN.md`](../../DESIGN.md) |
+> | Handoff log | [`PROGRESS.md`](../../PROGRESS.md) |
+
+---
+
 # DECISIONS.md — NewzWale Architectural & Design Decisions
 
 ## 1. Information Architecture (IA) Simplification

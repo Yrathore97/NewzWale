@@ -9,23 +9,79 @@ Full task list and rationale: `docs/superpowers/plans/2026-08-05-newzwale-rebuil
 
 ---
 
-## Status
+## Status — NewzWale 2.0, Phase 0 (Foundations) COMPLETE
 
-- **Branch:** `claude/news-website-redesign-c3de89` (worktree at `.claude/worktrees/news-website-redesign-c3de89`)
-- **Plan:** `docs/superpowers/plans/2026-08-05-categories-language-pagination.md`
-- **Spec:** `docs/superpowers/specs/2026-08-05-categories-language-pagination-design.md`
-- **Deployed:** NOT deployed. All work below is local and uncommitted to `main`.
-- **Local verification:** `npm test` 131/131 pass, `npx astro check` 0 errors, `npm run build` completes.
+- **Branch:** `claude/install-ui-ux-pro-max-skill-fb49bc`
+  (worktree at `.claude/worktrees/install-ui-ux-pro-max-skill-fb49bc`)
+- **Deployed:** NOT deployed. All work is local and uncommitted to `main`.
+- **Verification (2026-08-08):** `npm test` **240/240 pass** (was 134),
+  `npx astro check` **0 errors / 0 warnings**, `npm run build` completes.
+  News flow, fact-check flow and `/verify` verified working in a live dev
+  server, not merely compiled.
 
-**Progress on the categories/language/pagination plan: 20 of 20 tasks done.**
+### Current architecture (as built)
 
-Done: category allowlist, language list, paginated data layer, cache key v2,
-feed helpers, `/api/news` params, ArticleCard, NewsFeed props, category pages,
-navbar category strip, functional language selector, CategoryRail, LeadStory,
-new homepage composition, Tavily fact-check swap, Load more pagination.
+Astro 7 SSR on Cloudflare Workers · Tailwind v4 · KV (`NEWZ_CACHE`) ·
+Workers AI · Cloudflare Images (active via the adapter, currently unused) ·
+4 runtime dependencies · no database · no auth · localStorage user state.
 
-**Next step: nothing blocking.** The branch is ready for review and deploy. It
-has NOT been deployed — that is a deliberate hand-back, not an oversight.
+### Approved target architecture
+
+Same stack, extended incrementally — **no rewrite, no React, no Supabase,
+no second backend**:
+
+- **Cloudflare D1** as system of record (KV demoted to a TTL cache)
+- **Durable Object** for atomic rate limiting (KV has no atomic increment)
+- **Cron** scheduled ingestion, off the read path
+- **`/api/v1/*`** versioned contract, shared by web / PWA / future native
+- **`NewsProvider` abstraction**, RSS as a first-class ingestion layer
+- Six canonical verdicts: `true`, `false`, `partly_true`, `misleading`,
+  `unverified`, `needs_context`
+
+### Audit — complete and approved
+
+Eight planning documents in `docs/`. Start with
+`docs/NEWZWALE_AUDIT.md`; `docs/NEWZWALE_IMPLEMENTATION_PLAN.md` is the
+phase plan. `docs/NEWZWALE_DESIGN_DIRECTION.md` is an **approval gate** that
+must be signed off before any UI work.
+
+### Phase 0 — what landed
+
+| Area | Change |
+| --- | --- |
+| Docs | `DECISIONS.md` archived to `docs/archive/` with a superseded header (history preserved via `git mv`) |
+| Config | `wrangler.jsonc` documents D1 / Durable Object / Cron blocks **commented out** — they need real resource ids, and inventing placeholders would fail at deploy |
+| API | `src/lib/api/{errors,response,request}.ts` — v1 envelope, error codes, method validation, bounded body reads |
+| Service layer | `src/lib/news/service.ts` — one read path for pages *and* routes; `/api/news` migrated onto it |
+| Providers | `src/lib/news/providers.ts` — `NewsProvider` interface wrapping the existing newsdata/guardian/rss modules verbatim |
+| Schema | `src/lib/db/migrations/0001_init.sql` — 5 tables + 2 FTS indexes, written and **executed in tests**, not yet applied |
+| Cache | `fc:v1` truncated key → `fc:v2:sha256(claim \| pipeline \| evidence \| model)` |
+| Bug fix | `'no evidence'` no longer maps to `FALSE` |
+
+### Next phase — Phase 1 (Security), awaiting approval
+
+Bounded fetch (timeout / size / content-type), manual redirects with per-hop
+private-host revalidation, atomic rate limiting on a Durable Object,
+CSP + security headers, prompt-injection fencing, evidence URL validation.
+
+Phase 2 (D1 data layer) may run in parallel.
+**Do not start Phase 3+ before the foundation is reviewed.**
+
+### Known risks carried forward
+
+1. **Provider coverage is unmeasured.** 11 categories × 13 languages = 143
+   combinations is far beyond any free tier. Measure before locking the cron
+   schedule.
+2. **FTS5 tokenisation for Indic scripts is unproven.** `unicode61
+   remove_diacritics 2` is set in the migration but must be tested against
+   real Devanagari / Tamil / Urdu content before search ships.
+3. **Story clustering can over-merge.** Under-merging is a missing feature;
+   over-merging is a factual error. Start conservative.
+4. **`node:sqlite` needs Node ≥ 23.4.** CI pins Node 22, so the 24 schema
+   tests **skip in CI** while passing locally on Node 24. Bump CI to Node 24
+   or that coverage is imaginary.
+5. **Prompt edits flip verdicts.** Already happened once (see below). Build
+   the golden set before touching the prompt in Phase 3.
 
 ### Verified live against real APIs (2026-08-06)
 
@@ -140,7 +196,11 @@ so it does not get re-litigated.
 - Workers AI model id `@cf/meta/llama-3.1-8b-instruct` is deprecated on the live binding; the endpoint uses `-fp8` instead. Comment explaining this is in `src/pages/api/factcheck.ts`.
 - The fact-check system prompt is deliberately verbose about grading the CLAIM, not the evidence passages — a terser version was verified (against the live model) to flip verdicts on debunked claims (`false` → `verified`). Re-test both directions before editing that prompt.
 - `Response.json()` resolves to `unknown` project-wide (Cloudflare Workers types override `lib.dom`), not `any`. Cast it explicitly (`as { ... }`) or `astro check` fails — this is now a required CI gate.
-- `DECISIONS.md` at the repo root is **stale** — it describes the pre-rebuild architecture (Sarvam AI voice, `/admin`, grounded chat, FastAPI/Postgres). None of that reflects the current codebase. Don't use it as a source of truth; it needs a rewrite or deletion (not yet done).
+- `DECISIONS.md` has been **archived** to `docs/archive/DECISIONS.md` with a superseded header (Phase 0). It describes the pre-rebuild architecture (Sarvam AI voice, `/admin`, grounded chat, FastAPI/Postgres) and reflects nothing in the current codebase. Kept as history only — never as a source of truth.
+- `factCheckCacheKey()` is now **async** (SubtleCrypto) and returns `fc:v2:<sha256>`. It binds the pipeline identity from `src/lib/factcheck/version.ts`, so **bumping `PIPELINE_VERSION` or `EVIDENCE_VERSION` invalidates every affected cached verdict automatically**. That is the intended mechanism — do not work around it.
+- `MODEL` moved from `src/pages/api/factcheck.ts` to `src/lib/factcheck/version.ts`, because the model id is part of the cache identity: a different model can reach a different verdict on identical evidence.
+- The `fact_checks` table is **append-only, enforced by SQL triggers**, not by convention. Only `superseded_by` may be updated. A re-check inserts a new row. Tests assert this.
+- Page components still self-fetch `/api/news`; only the API route was migrated onto `src/lib/news/service.ts` in Phase 0. Moving the pages changes what renders and needs UI verification, so it belongs in a later phase.
 - `normalizeRating()` vs `coerceVerdict()` in `src/lib/factcheck/verdict.ts` are not interchangeable — the first parses human ratings like "Pants on Fire", the second validates an already-typed `Verdict` enum value. Mixing them up silently breaks unknown-claim handling.
 
 ## Deferred / not built

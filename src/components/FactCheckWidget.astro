@@ -184,12 +184,42 @@
     });
   });
 
+  // KEY MAPPING ONLY — no visual redesign. The UI is locked until the design
+  // direction is approved.
+  //
+  // This had to change: /api/factcheck now returns the six canonical wire
+  // values, and the old map keyed on 'verified'/'insufficient_evidence'. An
+  // unmatched key fell through to the insufficient_evidence entry, so a TRUE
+  // verdict rendered as "Not enough evidence to judge" — the API telling the
+  // truth and the interface contradicting it.
+  //
+  // Styling reuses EXISTING tokens; no new colours are introduced. The final
+  // treatment (including the unresolved brand-coral vs MISLEADING-orange
+  // collision, and the WCAG requirement that verdicts never rely on colour
+  // alone) belongs to NEWZWALE_DESIGN_DIRECTION.md.
   const VERDICTS: Record<string, { label: string; badgeClass: string; icon: string }> = {
-    verified: { label: 'Verified', badgeClass: 'bg-success/15 text-success border border-success/40', icon: '✓' },
-    misleading: { label: 'Misleading', badgeClass: 'bg-warning/15 text-warning border border-warning/40', icon: '⚠' },
+    true: { label: 'True', badgeClass: 'bg-success/15 text-success border border-success/40', icon: '✓' },
     false: { label: 'False', badgeClass: 'bg-error/15 text-error border border-error/40', icon: '✕' },
-    insufficient_evidence: { label: 'Not enough evidence to judge', badgeClass: 'bg-surface-card text-mute border border-hairline', icon: '?' },
+    partly_true: { label: 'Partly true', badgeClass: 'bg-warning/15 text-warning border border-warning/40', icon: '◐' },
+    misleading: { label: 'Misleading', badgeClass: 'bg-warning/25 text-warning border-2 border-warning/60', icon: '⚠' },
+    unverified: { label: 'Not enough evidence', badgeClass: 'bg-surface-card text-mute border border-hairline', icon: '?' },
+    needs_context: { label: 'Needs context', badgeClass: 'bg-primary-strong/10 text-primary-strong border border-primary-strong/40', icon: 'ⓘ' },
   };
+
+  // Evidence URLs originate from third-party APIs (Tavily, Google Fact Check).
+  // The server already filters them, but this is the last line before the
+  // value reaches `a.href`, where a `javascript:` URL would be script
+  // execution in the user's session. Both sides check: "the evidence provider
+  // was compromised" is precisely the threat model an evidence-first product
+  // has to survive. Mirrors isSafeUrl in src/lib/url.ts.
+  function isSafeHref(value: string): boolean {
+    try {
+      const { protocol } = new URL(value);
+      return protocol === 'http:' || protocol === 'https:';
+    } catch {
+      return false;
+    }
+  }
 
   function renderSources(evidence: { title: string; url: string; publisher: string }[]) {
     if (!sourcesList) return;
@@ -202,10 +232,17 @@
       return;
     }
     for (const e of evidence) {
-      const a = document.createElement('a');
-      a.href = e.url;
-      a.target = '_blank';
-      a.rel = 'noopener noreferrer';
+      const linkable = isSafeHref(e.url);
+
+      // An unsafe URL still gets its source listed - suppressing it entirely
+      // would hide from the reader that the check read something it could not
+      // vouch for. It is rendered as inert text rather than a clickable link.
+      const a = document.createElement(linkable ? 'a' : 'div');
+      if (linkable && a instanceof HTMLAnchorElement) {
+        a.href = e.url;
+        a.target = '_blank';
+        a.rel = 'noopener noreferrer';
+      }
       a.className = 'p-3 bg-surface-elevated border border-hairline rounded-md hover:border-primary transition-colors flex items-center justify-between gap-2 group';
 
       const title = document.createElement('span');
@@ -214,7 +251,7 @@
 
       const publisher = document.createElement('span');
       publisher.className = 'font-mono text-[10px] text-mute shrink-0';
-      publisher.textContent = `${e.publisher} ↗`;
+      publisher.textContent = linkable ? `${e.publisher} ↗` : `${e.publisher} (link withheld)`;
 
       a.appendChild(title);
       a.appendChild(publisher);
@@ -255,7 +292,9 @@
         return;
       }
 
-      const style = VERDICTS[data.verdict ?? ''] ?? VERDICTS.insufficient_evidence;
+      // Unknown verdict falls back to "not enough evidence" — the only safe
+      // default. Never assume a verdict the server did not send.
+      const style = VERDICTS[data.verdict ?? ''] ?? VERDICTS.unverified;
       if (verdictBadge) {
         verdictBadge.className = `inline-flex items-center gap-1.5 px-4 py-1.5 rounded-full text-xs font-bold uppercase tracking-wider shadow-stacked-sm ${style.badgeClass}`;
         verdictBadge.textContent = `${style.icon} ${style.label}`;
