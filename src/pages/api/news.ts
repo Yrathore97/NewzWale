@@ -1,69 +1,35 @@
 import type { APIRoute } from 'astro';
 import { env } from 'cloudflare:workers';
-import { fetchNewsData } from '../../lib/news/newsdata';
-import { fetchGuardianFallback } from '../../lib/news/guardian';
-import { fetchRssFallback } from '../../lib/news/rss';
-import { cached, newsCacheKey } from '../../lib/cache';
-import { isValidCategory, DEFAULT_CATEGORY } from '../../lib/news/categories';
-import { isValidLanguage, DEFAULT_LANGUAGE } from '../../lib/news/languages';
-import type { NewsPage } from '../../lib/news/types';
+import { getNewsPage } from '../../lib/news/service';
 
-const TTL = 20 * 60;
-
+/** Legacy news endpoint.
+ *
+ *  The validation, caching and provider-fallback logic that used to live here
+ *  now lives in src/lib/news/service.ts, so pages and API routes can share one
+ *  read path instead of pages issuing HTTP requests back into this route.
+ *
+ *  The RESPONSE SHAPE IS DELIBERATELY UNCHANGED - a bare
+ *  `{ articles, nextPage }`, not the /api/v1 envelope. NewsFeed.astro's "Load
+ *  more" handler parses this shape, and the point of versioning under /v1 is
+ *  that the migration can be gradual rather than a flag day. */
 export const GET: APIRoute = async ({ url }) => {
-  // Unrecognised values fall back to the default rather than being forwarded
-  // upstream - the allowlists are the boundary for user-supplied input.
-  const rawCategory = url.searchParams.get('category');
-  const category = isValidCategory(rawCategory) ? rawCategory : DEFAULT_CATEGORY;
-
-  const rawLanguage = url.searchParams.get('language');
-  const language = isValidLanguage(rawLanguage) ? rawLanguage : DEFAULT_LANGUAGE;
-
-  // Opaque upstream token. Passed through as-is, but bounded so it cannot be
-  // used to stuff an unbounded string into a cache key.
-  const page = url.searchParams.get('page')?.slice(0, 200) || undefined;
-
-  const apiKey = (env as unknown as { NEWSDATA_API_KEY?: string }).NEWSDATA_API_KEY ?? '';
-  const guardianKey = (env as unknown as { GUARDIAN_API_KEY?: string }).GUARDIAN_API_KEY ?? '';
-
-  const result = await cached<NewsPage>(
+  const result = await getNewsPage(
     env.NEWZ_CACHE,
-    newsCacheKey(category, language, page),
-    TTL,
-    async () => {
-      try {
-        const fresh = await fetchNewsData(apiKey, { category, language, page });
-        if (fresh.articles.length > 0) return fresh;
-        throw new Error('empty');
-      } catch {
-        // Guardian and RSS are both English-only and unpaginated, so neither
-        // contributes a nextPage. Both are a last resort for the first page
-        // only - paging into a fallback that cannot page would return the
-        // same articles forever.
-        if (page) throw new Error('no further pages');
-
-        if (guardianKey) {
-          try {
-            const articles = await fetchGuardianFallback(guardianKey, category);
-            if (articles.length > 0) return { articles, nextPage: null };
-          } catch {
-            // fall through to RSS
-          }
-        }
-
-        const articles = await fetchRssFallback();
-        // Throw rather than return [] so cached() can serve its stale copy
-        // instead of caching an empty feed for the full TTL.
-        if (articles.length === 0) throw new Error('no articles');
-        return { articles, nextPage: null };
-      }
+    {
+      category: url.searchParams.get('category'),
+      language: url.searchParams.get('language'),
+      page: url.searchParams.get('page'),
+    },
+    {
+      newsdata: (env as unknown as { NEWSDATA_API_KEY?: string }).NEWSDATA_API_KEY ?? '',
+      guardian: (env as unknown as { GUARDIAN_API_KEY?: string }).GUARDIAN_API_KEY ?? '',
     },
   );
 
   return new Response(
     JSON.stringify({
-      articles: result?.articles ?? [],
-      nextPage: result?.nextPage ?? null,
+      articles: result.articles,
+      nextPage: result.nextPage,
     }),
     { status: 200, headers: { 'content-type': 'application/json' } },
   );
