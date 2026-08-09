@@ -9,6 +9,147 @@ Full task list and rationale: `docs/superpowers/plans/2026-08-05-newzwale-rebuil
 
 ---
 
+## Status — Doc-Phase P5 (Routes and IA) COMPLETE (uncommitted)
+
+Committed baseline: `c6a724e` (5A+5B+5C+P7). This section is everything since.
+**976 tests pass** (961 → 976), astro check 0/0/0 (159 files), build PASS.
+
+### Route map delivered
+
+| Route | Kind | Notes |
+|---|---|---|
+| `/news` | SSR page | D1-backed, `/api/v1/news`; category filter chips |
+| `/news/[slug]` | SSR page | AD-09 shape (below) |
+| `/trending` | SSR page | `/api/v1/trending`, ranking formula unchanged |
+| `/search` | SSR page | `?q&type=news\|factcheck\|all` |
+| `/fact-check` | SSR page | renamed from `/verify`; FAQ preserved in place |
+| `/fact-check/[id]` | SSR page | OG title/description vary by verdict |
+| `/fact-check/history` | Static shell | honest empty state — see limitation below |
+| `/methodology` | Static | extracted from `verify.astro:47-71`, verbatim |
+| `/saved` | Static shell | reuses existing `window.NZ` localStorage API |
+| `/verify` | 301 | `Astro.redirect('/fact-check', 301)` |
+| `GET /api/v1/news/[slug]` | API | story + cluster coverage + linked fact-checks |
+| `POST /api/v1/factcheck` | API | wraps the extracted pipeline handler |
+| `GET /api/v1/factcheck/[id]` | API | `FactCheckRepository.findById` |
+| `GET /api/v1/search` | API | `type=news\|factcheck\|all` added |
+| `GET /api/v1/ticker` | API | **corrected**, see below |
+
+### AD-09 — treated as resolved
+
+`NEWZWALE_ARCHITECTURE.md` marks AD-09 "Status: Requires your approval" and
+never revisits it. But `NEWZWALE_UI_UX_SPEC.md` §4.3 opens with "Per
+architecture AD-09" and lays out the exact layout AD-09 proposed — headline,
+publisher, timestamp, attributed extract, prominent read-full-story link,
+coverage cluster, fact-check panel, related stories. A later design document
+adopting a decision's exact proposed shape is the resolution; `/news/[slug]`
+was implemented to that layout precisely. No article body is fetched,
+generated, or hosted — the publisher's own `summary` is quoted verbatim.
+
+**Flag: this reading is mine, not a written approval from you.** If you
+intended AD-09 to remain open, `/news/[slug]` and its API route are the two
+files to revert.
+
+### `/api/v1/ticker` — corrected, not preserved
+
+The audit found this route serving D1 headlines. No planning document names
+a headline endpoint at this path; the arch doc's API table and security
+finding S-08 both define `/api/v1/ticker` as the **market ticker**
+(Sensex/Nifty), KV-cached 60s, rate-limited. Serving headlines there was a
+naming mistake from 5C, not a contract worth preserving.
+
+Rebuilt to match: KV-cached 60s, rate-limited, and — this took a self-caught
+fix — **does not use the shared `cached()` helper**, because that helper
+falls back to a stale KV entry on fetch failure. S-08 explicitly says market
+data must hide rather than show a stale number on failure; `cached()`'s
+fallback would have violated that. The route now does a plain get/put with no
+stale path: a fetch failure is always a 503, never an old price.
+
+`fetchMarketTicker()` (Yahoo quote logic) was extracted to `src/lib/market.ts`
+so v1 can reuse it — `src/pages/api/ticker.ts` (legacy) is untouched, byte
+for byte, since its own S-08 remediation (cache + rate-limit *that* route) is
+out of P5 scope and importing from a shared module without applying the fix
+would disturb a file with no documented reason to change.
+
+`listRecent()` on `ArticleRepository`, written for the original (wrong)
+ticker meaning, is no longer called by any route. Left in place: it is a
+reasonable general-purpose repository primitive and is tested; deleting it
+would mean discarding passing test coverage to remove ~25 lines of unused-for-now
+code.
+
+### Fact-check pipeline: extracted, not duplicated
+
+`src/lib/factcheck/route.ts` now holds `runFactCheckRequest()` — the exact
+logic previously inline in `/api/factcheck.ts` (validate → rate-limit → cache
+→ pipeline → persist), moved verbatim. Both `/api/factcheck` (bare JSON,
+unchanged shape) and `/api/v1/factcheck` (envelope) call this one function.
+Confirmed identical by diff: the legacy route is a line-for-line
+re-expression of the old handler, not a behavioural change.
+
+Append-only is untouched — persistence still goes through
+`FactCheckRepository.create()`, which has no update/delete path.
+
+### `/fact-check` — content preserved, not deleted
+
+`verify.astro` held three things: the checker, methodology, and an FAQ. D8
+resolves the checker → `/fact-check`. The arch doc resolves methodology →
+`/methodology` (verbatim, moved). **The FAQ's destination was never
+documented anywhere.** Per instruction, undocumented is not license to
+delete: the FAQ stays on `/fact-check`, alongside the checker, where it
+already was.
+
+One correction made in the methodology move: the old copy said "one of four
+verdicts: Verified, Misleading, False, or Not enough evidence to judge" —
+stale text from before the Phase 3 six-verdict migration (the six verdicts
+were already live in `FactCheckWidget.astro`'s own `VERDICTS` map). The
+architecture doc requires methodology to "state which verdicts are in active
+use," so the list was corrected to the actual six. This is a correction to
+match already-shipped behaviour, not new methodology.
+
+Internal links updated to `/fact-check` (Navbar × 3, Footer × 3,
+FactCheckPromo, the floating CTA in `Layout.astro`, `SeoContentSection`) —
+minimal href edits, no redesign.
+
+### Sitemap
+
+`public/sitemap.xml` (hand-maintained, stale `lastmod: 2026-08-07` on every
+entry, listed `/verify`) replaced by `src/pages/sitemap.xml.ts`, a plain XML
+template — no dependency added; `@astrojs/sitemap` would solve a problem 15
+static/category entries don't have. `<lastmod>` is omitted entirely rather
+than filled with another value nobody will keep current. `/verify` removed;
+`/fact-check` and the new P5 pages added. Per-article/per-fact-check entries
+are **not** generated — undocumented, and inventing an update frequency and
+cap would be exactly the kind of unspecified requirement this pass must not
+invent.
+
+### Known limitation: `/fact-check/history` has no data to show
+
+No client-side history storage exists anywhere in the codebase —
+`FactCheckWidget.astro` does not write completed checks to `localStorage`
+under any key. Wiring it to do so is a change to that component's check
+flow, which the instructions explicitly placed out of P5's page-shell scope
+("do not turn P5 into a component redesign") and forbade inventing a new
+storage schema for. The page therefore shows an honest, permanent-looking
+empty state rather than a fabricated list. `/saved` had the opposite
+situation — `window.NZ.getSaved()/toggleSaved()` already existed — and reuses
+it directly.
+
+### Testing
+
+`route.ts` (shared fact-check handler) and the four new/changed API routes
+that import `env` from `'cloudflare:workers'` **cannot be unit-tested by
+direct import** — that module has no resolution under plain Node/vitest, the
+same constraint that already applied to the pre-P5 `/api/factcheck.ts` (no
+existing test ever imported it). Consistent with that boundary, this pass
+tests the composition each route performs — `ArticleRepository.findBySlug` +
+`listByCluster` + the new `FactCheckRepository.listByArticle`, executed
+together exactly as `/api/v1/news/[slug]` calls them — against real SQLite
+running both real migrations, rather than the route file itself.
+`fetchMarketTicker()` has no such import and is tested directly with a
+stubbed `fetch`, matching the existing convention in
+`tests/news/provider-integration.test.ts`.
+
+---
+
 ## Status — Phase 5A / 5B / 5C + P7 search fallback COMPLETE (uncommitted)
 
 > **Naming.** The plan in `docs/NEWZWALE_IMPLEMENTATION_PLAN.md` uses NUMBERED
@@ -165,7 +306,7 @@ puts undated articles last and restores a total order.
 | `GET /api/v1/news` | D1 | `?category ?language ?limit ?cursor`; keyset, not OFFSET |
 | `GET /api/v1/search` | D1 FTS | `?q` required + bounded; `?category ?language ?limit ?cursor` |
 | `GET /api/v1/trending` | D1 clusters | `?limit`; published formula below |
-| `GET /api/v1/ticker` | D1 | `?limit`; newest headlines, uncursored |
+| `GET /api/v1/ticker` | KV + Yahoo | market ticker (Sensex/Nifty); corrected in P5, see below |
 | `GET /api/v1/weather` | `request.cf` + Open-Meteo | closes S-09 server half; keyless |
 
 Envelope is the existing `ok()` / `fail()` from `src/lib/api/response.ts`; no
@@ -204,8 +345,10 @@ moment it is written.
 status`. `/api/news` keeps its bare `{articles, nextPage}` shape and still
 reads KV + the provider chain; it was deliberately NOT re-pointed at D1,
 because that changes what the homepage renders and belongs with the UI
-migration. `/api/v1/ticker` is a *different dataset* from `/api/ticker`
-(headlines vs Sensex/Nifty) — the old name was not reused for a new meaning.
+migration. `/api/v1/ticker` originally served D1 headlines under this path —
+**corrected in P5**, see below: no document names a headline endpoint here,
+and the arch doc's API table + S-08 both define `/api/v1/ticker` as the
+market ticker.
 
 **Fallback when D1 is absent** (which is the case today): every D1-backed v1
 route returns `UPSTREAM_UNAVAILABLE` (503) with a message naming no binding,

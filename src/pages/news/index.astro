@@ -1,0 +1,125 @@
+---
+import Layout from '../../layouts/Layout.astro';
+import Navbar from '../../components/Navbar.astro';
+import MastheadInfoStrip from '../../components/MastheadInfoStrip.astro';
+import ArticleCard from '../../components/ArticleCard.astro';
+import Footer from '../../components/Footer.astro';
+import { CATEGORIES, isValidCategory, DEFAULT_CATEGORY } from '../../lib/news/categories';
+import { isValidLanguage, DEFAULT_LANGUAGE } from '../../lib/news/languages';
+import type { ApiArticle } from '../../lib/news/read';
+import type { ApiResponseBody } from '../../lib/api/response';
+
+// P5 (NEWZWALE_ARCHITECTURE.md §4.1/§4.2): "/news — Full chronological feed,
+// filterable", reading /api/v1/news. D1-backed, unlike the homepage's
+// NewsFeed.astro which still self-fetches the legacy KV/provider
+// /api/news — that path is deliberately untouched (out of P5 scope).
+export const prerender = false;
+
+const rawCategory = Astro.url.searchParams.get('category');
+const rawLanguage = Astro.url.searchParams.get('language');
+const category = isValidCategory(rawCategory) ? rawCategory : DEFAULT_CATEGORY;
+const language = isValidLanguage(rawLanguage) ? rawLanguage : DEFAULT_LANGUAGE;
+
+let articles: ApiArticle[] = [];
+let cursor: string | undefined;
+/** True only when the database itself is unavailable (503), so the template
+ *  can tell "no D1 binding yet" apart from "no articles match" — the
+ *  documented controlled-503 path, not a fabricated empty feed. */
+let dbUnavailable = false;
+
+try {
+  const res = await fetch(
+    new URL(
+      `/api/v1/news?category=${encodeURIComponent(category)}&language=${encodeURIComponent(language)}`,
+      Astro.url,
+    ),
+  );
+  const body = (await res.json()) as ApiResponseBody<ApiArticle[]>;
+  if ('data' in body) {
+    articles = body.data;
+    cursor = body.meta?.cursor;
+  } else if (res.status === 503) {
+    dbUnavailable = true;
+  }
+} catch {
+  dbUnavailable = true;
+}
+---
+
+<Layout
+  title="Latest News | NewzWale"
+  description="The full NewzWale headline feed, filterable by category and language."
+>
+  <Navbar />
+  <MastheadInfoStrip />
+
+  <main id="main" class="flex-1 py-8 bg-surface-soft">
+    <div class="max-w-[1400px] mx-auto px-4 sm:px-6 mb-6">
+      <nav aria-label="Breadcrumb" class="mb-4">
+        <ol class="flex items-center gap-2 text-xs text-mute font-mono-caption">
+          <li><a href="/" class="hover:text-primary-strong">Home</a></li>
+          <li aria-hidden="true">/</li>
+          <li class="text-ink font-semibold">News</li>
+        </ol>
+      </nav>
+      <h1 class="text-3xl sm:text-4xl font-semibold text-ink tracking-tight">Latest News</h1>
+
+      <div class="flex flex-wrap gap-2 mt-4" role="group" aria-label="Filter by category">
+        <a
+          href={`/news?language=${language}`}
+          class={`px-3.5 py-1.5 text-xs font-medium rounded-full ${category === DEFAULT_CATEGORY ? 'bg-primary-strong text-on-primary font-semibold' : 'bg-secondary-bg text-ink-soft hover:bg-secondary-pressed'}`}
+        >
+          All
+        </a>
+        {CATEGORIES.map((c) => (
+          <a
+            href={`/news?category=${c.slug}&language=${language}`}
+            aria-current={category === c.slug ? 'page' : undefined}
+            class={`px-3.5 py-1.5 text-xs font-medium rounded-full ${category === c.slug ? 'bg-primary-strong text-on-primary font-semibold' : 'bg-secondary-bg text-ink-soft hover:bg-secondary-pressed'}`}
+          >
+            {c.label}
+          </a>
+        ))}
+      </div>
+    </div>
+
+    <div class="max-w-[1400px] mx-auto px-4 sm:px-6">
+      {dbUnavailable ? (
+        <p class="text-sm text-body bg-surface-elevated border border-hairline rounded-md p-4">
+          The news database is not available right now. Please check back shortly.
+        </p>
+      ) : articles.length === 0 ? (
+        <p class="text-sm opacity-70 text-body">No articles found for this filter yet.</p>
+      ) : (
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+          {articles.map((a) => (
+            <ArticleCard
+              article={{
+                id: a.id,
+                title: a.title,
+                url: a.url,
+                summary: a.summary ?? '',
+                imageUrl: a.imageUrl,
+                source: a.source,
+                category: a.category,
+                publishedAt: a.publishedAt ?? '',
+              }}
+            />
+          ))}
+        </div>
+      )}
+      {cursor && (
+        <p class="mt-8 text-center text-xs text-mute">
+          <a
+            href={`/news?category=${category}&language=${language}&cursor=${encodeURIComponent(cursor)}`}
+            class="px-6 py-2.5 inline-block bg-ink hover:bg-charcoal text-canvas text-sm font-semibold rounded-md shadow-stacked-sm transition-colors"
+          >
+            Load more headlines
+          </a>
+        </p>
+      )}
+    </div>
+  </main>
+
+  <Footer />
+</Layout>

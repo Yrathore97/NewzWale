@@ -1,0 +1,49 @@
+---
+import Layout from '../../layouts/Layout.astro';
+import Navbar from '../../components/Navbar.astro';
+import MastheadInfoStrip from '../../components/MastheadInfoStrip.astro';
+import Footer from '../../components/Footer.astro';
+
+// P5: "/fact-check/history — Your past checks — Local store". The
+// implementation plan explicitly forbids a server-side history database
+// here, so this is a page shell only. NO client-side history storage exists
+// anywhere in the codebase today — FactCheckWidget.astro does not write
+// completed checks to localStorage under any key — so this page cannot show
+// real history without EITHER inventing a new client storage schema (not
+// authorised: "do not invent a new storage schema unless one already
+// exists") OR modifying FactCheckWidget's check flow to start writing one
+// (a component behaviour change, out of P5's page-shell scope, and
+// explicitly forbidden: "Do not turn P5 into a component redesign").
+//
+// So: an honest, permanent-feeling empty state, not a fabricated list. Wiring
+// FactCheckWidget to actually populate this is flagged as a known limitation
+// in the P5 report, for a future phase to pick up deliberately.
+export const prerender = true;
+---
+
+<Layout title="Your Fact-Check History | NewzWale" description="Claims you've checked, stored on this device.">
+  <Navbar />
+  <MastheadInfoStrip />
+
+  <main id="main" class="flex-1 py-8 bg-surface-soft">
+    <div class="max-w-3xl mx-auto px-4 sm:px-6">
+      <nav aria-label="Breadcrumb" class="mb-4">
+        <ol class="flex items-center gap-2 text-xs text-mute font-mono-caption">
+          <li><a href="/" class="hover:text-primary-strong">Home</a></li>
+          <li aria-hidden="true">/</li>
+          <li><a href="/fact-check" class="hover:text-primary-strong">Fact Check</a></li>
+          <li aria-hidden="true">/</li>
+          <li class="text-ink font-semibold">History</li>
+        </ol>
+      </nav>
+      <h1 class="text-3xl sm:text-4xl font-semibold text-ink tracking-tight mb-2">Your Fact-Check History</h1>
+      <p class="text-sm text-mute mb-6">Stored on this device only.</p>
+
+      <p class="text-sm opacity-70 text-body">
+        Checks you run will appear here. <a href="/fact-check" class="text-primary-strong font-semibold hover:underline">Check a claim →</a>
+      </p>
+    </div>
+  </main>
+
+  <Footer />
+</Layout>

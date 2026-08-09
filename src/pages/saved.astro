@@ -1,0 +1,78 @@
+---
+import Layout from '../layouts/Layout.astro';
+import Navbar from '../components/Navbar.astro';
+import MastheadInfoStrip from '../components/MastheadInfoStrip.astro';
+import Footer from '../components/Footer.astro';
+
+// P5: "/saved — Saved articles (today: a drawer) — Local store". Promotes
+// the existing drawer's storage to a full page. Reuses window.NZ.getSaved()/
+// toggleSaved(), defined once in Layout.astro and already used by
+// SavedArticlesDrawer.astro and ArticleCard's save buttons — no new storage
+// schema, no server-side persistence.
+export const prerender = true;
+---
+
+<Layout title="Saved Articles | NewzWale" description="Articles you've saved to read later, stored on this device.">
+  <Navbar />
+  <MastheadInfoStrip />
+
+  <main id="main" class="flex-1 py-8 bg-surface-soft">
+    <div class="max-w-3xl mx-auto px-4 sm:px-6">
+      <nav aria-label="Breadcrumb" class="mb-4">
+        <ol class="flex items-center gap-2 text-xs text-mute font-mono-caption">
+          <li><a href="/" class="hover:text-primary-strong">Home</a></li>
+          <li aria-hidden="true">/</li>
+          <li class="text-ink font-semibold">Saved</li>
+        </ol>
+      </nav>
+      <h1 class="text-3xl sm:text-4xl font-semibold text-ink tracking-tight mb-2">Saved Articles</h1>
+      <p class="text-sm text-mute mb-6">
+        Stored on this device only — saving on another browser or device starts a separate list.
+      </p>
+
+      <p id="saved-page-empty" class="text-sm opacity-70 text-body">
+        You haven't saved any articles yet. Look for the Save button on a news card.
+      </p>
+      <div id="saved-page-list" class="grid grid-cols-1 sm:grid-cols-2 gap-4"></div>
+    </div>
+  </main>
+
+  <Footer />
+</Layout>
+
+<script>
+  const empty = document.getElementById('saved-page-empty');
+  const list = document.getElementById('saved-page-list');
+
+  function render() {
+    if (!list || !empty) return;
+    const saved = window.NZ.getSaved();
+    empty.hidden = saved.length > 0;
+    list.innerHTML = '';
+
+    for (const article of saved) {
+      const card = document.createElement('div');
+      card.className = 'border border-hairline rounded-md p-4 bg-surface-elevated';
+
+      const link = document.createElement('a');
+      link.href = article.href;
+      link.target = '_blank';
+      link.rel = 'noopener noreferrer';
+      link.className = 'block text-sm font-semibold text-ink mb-2 hover:text-primary-strong';
+      link.textContent = article.headline;
+
+      const removeBtn = document.createElement('button');
+      removeBtn.type = 'button';
+      removeBtn.className = 'text-xs font-medium text-primary-strong bg-transparent border-none cursor-pointer p-0';
+      removeBtn.textContent = 'Remove';
+      removeBtn.addEventListener('click', () => window.NZ.toggleSaved(article.href, article.headline));
+
+      card.appendChild(link);
+      card.appendChild(removeBtn);
+      list.appendChild(card);
+    }
+  }
+
+  window.addEventListener('nz-saved-changed', render);
+  render();
+</script>

@@ -1,0 +1,126 @@
+---
+import Layout from '../../layouts/Layout.astro';
+import Navbar from '../../components/Navbar.astro';
+import MastheadInfoStrip from '../../components/MastheadInfoStrip.astro';
+import Footer from '../../components/Footer.astro';
+import type { FactCheckWithEvidence } from '../../lib/db/repositories/fact-checks';
+import type { ApiResponseBody } from '../../lib/api/response';
+
+// P5: "/fact-check/[id] — Permalink to one completed check". Reads
+// /api/v1/factcheck/[id], which reuses FactCheckRepository.findById — the
+// SAME append-only record a reader saw when the check ran. Nothing here can
+// mutate it; there is no update/delete path on this table.
+export const prerender = false;
+
+const { id } = Astro.params;
+
+let result: FactCheckWithEvidence | null = null;
+
+if (id) {
+  try {
+    const res = await fetch(new URL(`/api/v1/factcheck/${encodeURIComponent(id)}`, Astro.url));
+    if (res.ok) {
+      const body = (await res.json()) as ApiResponseBody<FactCheckWithEvidence>;
+      if ('data' in body) result = body.data;
+    }
+  } catch {
+    // result stays null; falls through to 404 below
+  }
+}
+
+if (!result) {
+  return new Response(null, { status: 404 });
+}
+
+const { factCheck, evidence } = result;
+
+// Six canonical verdicts (schema.ts / migration 0001 CHECK constraint).
+// Mirrors FactCheckWidget.astro's VERDICTS map so the permalink page and the
+// live checker never disagree about a verdict's label — one vocabulary,
+// referenced twice, not redefined.
+const VERDICTS: Record<string, { label: string; badgeClass: string; icon: string }> = {
+  true: { label: 'True', badgeClass: 'bg-success/15 text-success border border-success/40', icon: '✓' },
+  false: { label: 'False', badgeClass: 'bg-error/15 text-error border border-error/40', icon: '✕' },
+  partly_true: { label: 'Partly true', badgeClass: 'bg-warning/15 text-warning border border-warning/40', icon: '◐' },
+  misleading: { label: 'Misleading', badgeClass: 'bg-warning/25 text-warning border-2 border-warning/60', icon: '⚠' },
+  unverified: { label: 'Not enough evidence', badgeClass: 'bg-surface-card text-mute border border-hairline', icon: '?' },
+  needs_context: { label: 'Needs context', badgeClass: 'bg-primary-strong/10 text-primary-strong border border-primary-strong/40', icon: 'ⓘ' },
+};
+const style = VERDICTS[factCheck.verdict] ?? VERDICTS.unverified;
+
+// OG tags per verdict: title and description vary with the actual result,
+// so a shared link preview shows what was found rather than a generic label.
+const ogTitle = `${style.label}: ${factCheck.claim} | NewzWale Fact Check`;
+const ogDescription = factCheck.summary || factCheck.claim;
+---
+
+<Layout title={ogTitle} description={ogDescription}>
+  <Navbar />
+  <MastheadInfoStrip />
+
+  <main id="main" class="flex-1 py-8 bg-surface-soft">
+    <div class="max-w-3xl mx-auto px-4 sm:px-6">
+      <nav aria-label="Breadcrumb" class="mb-4">
+        <ol class="flex items-center gap-2 text-xs text-mute font-mono-caption">
+          <li><a href="/" class="hover:text-primary-strong">Home</a></li>
+          <li aria-hidden="true">/</li>
+          <li><a href="/fact-check" class="hover:text-primary-strong">Fact Check</a></li>
+          <li aria-hidden="true">/</li>
+          <li class="text-ink font-semibold">Result</li>
+        </ol>
+      </nav>
+
+      <p class="text-sm text-mute mb-2">Claim</p>
+      <h1 class="text-xl sm:text-2xl font-semibold text-ink leading-snug mb-4">{factCheck.claim}</h1>
+
+      <div aria-live="polite" class="space-y-6">
+        <span
+          class:list={[
+            'inline-flex items-center gap-1.5 px-4 py-1.5 rounded-full text-xs font-bold uppercase tracking-wider shadow-stacked-sm',
+            style.badgeClass,
+          ]}
+        >
+          {style.icon} {style.label}
+        </span>
+
+        {factCheck.basis === 'certified' && evidence[0] && (
+          <p class="text-xs text-mute">Reviewed by {evidence[0].publisher}.</p>
+        )}
+        {factCheck.basis === 'ai_assessment' && (
+          <p class="text-xs text-mute">AI assessment based on the sources below — not a certified fact-check.</p>
+        )}
+
+        <div class="text-sm font-medium text-ink bg-surface-elevated p-4 rounded-md border border-hairline leading-relaxed shadow-stacked-sm">
+          {factCheck.summary}
+        </div>
+
+        {factCheck.limitations && (
+          <p class="text-xs text-mute">{factCheck.limitations}</p>
+        )}
+
+        {evidence.length > 0 && (
+          <div>
+            <h2 class="font-mono-caption text-primary-strong text-xs font-semibold mb-3">SOURCES</h2>
+            <ul class="space-y-2">
+              {evidence.map((e) => (
+                <li class="text-sm">
+                  <a href={e.url} target="_blank" rel="noopener noreferrer" class="text-ink hover:text-primary-strong">
+                    {e.title}
+                  </a>
+                  <span class="text-xs text-mute"> — {e.publisher}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+
+        <p class="text-xs text-mute pt-4 border-t border-hairline">
+          Checked {new Date(factCheck.checkedAt ?? '').toLocaleDateString('en-IN', { month: 'short', day: 'numeric', year: 'numeric' })}
+          · <a href="/methodology" class="underline hover:no-underline">How we checked this</a>
+        </p>
+      </div>
+    </div>
+  </main>
+
+  <Footer />
+</Layout>

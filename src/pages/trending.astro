@@ -1,0 +1,82 @@
+---
+import Layout from '../layouts/Layout.astro';
+import Navbar from '../components/Navbar.astro';
+import MastheadInfoStrip from '../components/MastheadInfoStrip.astro';
+import Footer from '../components/Footer.astro';
+import type { ApiStory } from '../lib/news/read';
+import type { ApiResponseBody } from '../lib/api/response';
+
+// P5: "/trending — Ranked by velocity + coverage breadth". Reuses
+// rankTrending() via /api/v1/trending — the ranking formula itself is
+// Phase 5C's, not redefined here (P5 must not tune the half-life/source
+// floor per the instruction).
+export const prerender = false;
+
+let stories: ApiStory[] = [];
+let dbUnavailable = false;
+
+try {
+  const res = await fetch(new URL('/api/v1/trending', Astro.url));
+  const body = (await res.json()) as ApiResponseBody<ApiStory[]>;
+  if ('data' in body) {
+    stories = body.data;
+  } else if (res.status === 503) {
+    dbUnavailable = true;
+  }
+} catch {
+  dbUnavailable = true;
+}
+---
+
+<Layout
+  title="Trending Stories | NewzWale"
+  description="Stories ranked by breadth of independent coverage, not clicks — NewzWale has no engagement data to rank on."
+>
+  <Navbar />
+  <MastheadInfoStrip />
+
+  <main id="main" class="flex-1 py-8 bg-surface-soft">
+    <div class="max-w-4xl mx-auto px-4 sm:px-6 mb-6">
+      <nav aria-label="Breadcrumb" class="mb-4">
+        <ol class="flex items-center gap-2 text-xs text-mute font-mono-caption">
+          <li><a href="/" class="hover:text-primary-strong">Home</a></li>
+          <li aria-hidden="true">/</li>
+          <li class="text-ink font-semibold">Trending</li>
+        </ol>
+      </nav>
+      <h1 class="text-3xl sm:text-4xl font-semibold text-ink tracking-tight">Trending</h1>
+      <p class="text-sm text-body mt-2 leading-relaxed">
+        Ranked by how many independent sources are covering each story, weighted toward recency.
+        Not click counts or social shares — NewzWale collects neither.
+      </p>
+    </div>
+
+    <div class="max-w-4xl mx-auto px-4 sm:px-6">
+      {dbUnavailable ? (
+        <p class="text-sm text-body bg-surface-elevated border border-hairline rounded-md p-4">
+          Trending data is not available right now. Please check back shortly.
+        </p>
+      ) : stories.length === 0 ? (
+        <p class="text-sm opacity-70 text-body">
+          Not enough coverage yet to rank stories. Check back once more sources have reported.
+        </p>
+      ) : (
+        <ol class="space-y-3">
+          {stories.map((s, i) => (
+            <li class="flex items-start gap-4 p-4 bg-surface-elevated border border-hairline rounded-md">
+              <span class="font-mono-caption text-mute text-lg w-6 shrink-0">{i + 1}</span>
+              <div>
+                <h2 class="text-base font-semibold text-ink leading-snug">{s.headline}</h2>
+                <p class="text-xs text-mute mt-1">
+                  Reported by {s.sourceCount} independent {s.sourceCount === 1 ? 'source' : 'sources'}
+                </p>
+              </div>
+            </li>
+          ))}
+        </ol>
+      )}
+    </div>
+  </main>
+
+  <Footer />
+</Layout>

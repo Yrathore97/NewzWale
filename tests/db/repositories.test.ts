@@ -261,6 +261,58 @@ d('FactCheckRepository', () => {
     expect(await repo.listRecent()).toHaveLength(1);
   });
 
+  describe('listByArticle (P5 — /news/[slug] fact-check panel)', () => {
+    // article_id is a real foreign key, so the referenced article must exist.
+    const seedArticle = async (id: string) => {
+      const articles = new ArticleRepository(db);
+      await articles.insertIfNew({
+        id,
+        slug: id,
+        canonicalUrl: `https://x.com/${id}`,
+        originalUrl: `https://x.com/${id}`,
+        title: `Story ${id}`,
+        publisherName: 'Publisher',
+        category: 'top',
+        language: 'en',
+        publishedAt: '2026-08-08T00:00:00Z',
+        providerId: 'rss',
+      });
+    };
+
+    it('finds checks linked to an article', async () => {
+      await seedArticle('a1');
+      await repo.create({ ...sampleCheck('fc1'), factCheck: { ...sampleCheck('fc1').factCheck, articleId: 'a1' } });
+      expect((await repo.listByArticle('a1')).map((c) => c.id)).toEqual(['fc1']);
+    });
+
+    // The normal case: most articles have no submitted claim.
+    it('returns empty rather than an error when nothing is linked', async () => {
+      expect(await repo.listByArticle('no-such-article')).toEqual([]);
+    });
+
+    it('excludes checks linked to a different article', async () => {
+      await seedArticle('a1');
+      await seedArticle('a2');
+      await repo.create({ ...sampleCheck('fc1'), factCheck: { ...sampleCheck('fc1').factCheck, articleId: 'a1' } });
+      await repo.create({ ...sampleCheck('fc2'), factCheck: { ...sampleCheck('fc2').factCheck, articleId: 'a2' } });
+      expect((await repo.listByArticle('a1')).map((c) => c.id)).toEqual(['fc1']);
+    });
+
+    it('excludes superseded checks', async () => {
+      await seedArticle('a1');
+      await repo.create({ ...sampleCheck('old'), factCheck: { ...sampleCheck('old').factCheck, articleId: 'a1' } });
+      await repo.create({ ...sampleCheck('new'), factCheck: { ...sampleCheck('new').factCheck, articleId: 'a1' } });
+      await repo.supersede('old', 'new');
+      expect((await repo.listByArticle('a1')).map((c) => c.id)).toEqual(['new']);
+    });
+
+    it('bounds the limit', async () => {
+      await seedArticle('a1');
+      await repo.create({ ...sampleCheck('fc1'), factCheck: { ...sampleCheck('fc1').factCheck, articleId: 'a1' } });
+      await expect(repo.listByArticle('a1', 10_000)).resolves.toBeInstanceOf(Array);
+    });
+  });
+
   describe('claim search', () => {
     it('finds a check by a word in its claim', async () => {
       await repo.create(sampleCheck('fc1'));

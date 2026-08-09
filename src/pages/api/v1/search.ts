@@ -1,11 +1,15 @@
 import type { APIRoute } from 'astro';
 import { env } from 'cloudflare:workers';
-import { assertMethod } from '../../../lib/api/request';
+import { assertMethod, enumParam } from '../../../lib/api/request';
 import { handle, ok } from '../../../lib/api/response';
 import { cursorFrom, limitParam, optionalFilters, requireQuery } from '../../../lib/api/query';
 import { requireDbBinding } from '../../../lib/api/bindings';
 import { ArticleRepository } from '../../../lib/db/repositories/articles';
+import { FactCheckRepository } from '../../../lib/db/repositories/fact-checks';
 import { toApiArticle } from '../../../lib/news/read';
+
+const SEARCH_TYPES = ['news', 'factcheck', 'all'] as const;
+type SearchType = (typeof SEARCH_TYPES)[number];
 
 /** GET /api/v1/search — full-text search over persisted articles.
  *
@@ -33,19 +37,60 @@ import { toApiArticle } from '../../../lib/news/read';
  *  Unlike the feed, an unrecognised category or language is treated as NO
  *  filter rather than as the default: a search should span everything rather
  *  than quietly narrowing to `top` and reporting nothing for a story that
- *  exists. */
+ *  exists.
+ *
+ *  `?type=` selects the corpus, per the documented contract
+ *  (`/api/v1/search?q&type&cursor`, NEWZWALE_ARCHITECTURE.md §4.2):
+ *
+ *    news (default)  data: ApiArticle[]        — UNCHANGED from before this
+ *                                                 param existed; a caller
+ *                                                 that never sends `type`
+ *                                                 gets byte-identical output.
+ *    factcheck       data: FactCheckRecord[]   — reuses
+ *                                                 FactCheckRepository.search(),
+ *                                                 which is limit-only.
+ *                                                 `meta.cursor` is honestly
+ *                                                 absent rather than faked:
+ *                                                 that repository method has
+ *                                                 no cursor support to
+ *                                                 forward.
+ *    all             data: { news, factChecks } — both corpora, un-paginated
+ *                                                 relative to each other for
+ *                                                 the same reason.
+ *
+ *  Category/language filters apply to `news` only — fact-checks are not
+ *  categorised by article category in the schema. */
 export const GET: APIRoute = async ({ request, url }) =>
   handle(async () => {
     assertMethod(request, 'GET');
 
     const db = requireDbBinding(env);
     const q = requireQuery(url);
-    const { category, language } = optionalFilters(url);
+    const type = enumParam(url.searchParams.get('type'), SEARCH_TYPES, 'news' as SearchType);
+    const limit = limitParam(url);
 
+    if (type === 'factcheck') {
+      const results = await new FactCheckRepository(db).search(q, limit);
+      return ok(results, { cached: false });
+    }
+
+    if (type === 'all') {
+      const { category, language } = optionalFilters(url);
+      const [newsPage, factChecks] = await Promise.all([
+        new ArticleRepository(db).searchPage(q, { category, language, limit }),
+        new FactCheckRepository(db).search(q, limit),
+      ]);
+      return ok(
+        { news: newsPage.items.map(toApiArticle), factChecks },
+        { cached: false },
+      );
+    }
+
+    const { category, language } = optionalFilters(url);
     const page = await new ArticleRepository(db).searchPage(q, {
       category,
       language,
-      limit: limitParam(url),
+      limit,
       cursor: cursorFrom(url),
     });
 

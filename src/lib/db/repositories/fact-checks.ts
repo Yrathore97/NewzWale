@@ -236,6 +236,25 @@ export class FactCheckRepository {
     return rows.results.map(toFactCheck);
   }
 
+  /** Checked claims linked to one article, for the `/news/[slug]` fact-check
+   *  panel (AD-09). `article_id` is set only when a check was submitted from
+   *  that story's URL, so most articles will have none — an empty array is
+   *  the normal case, not an error. */
+  async listByArticle(articleId: string, limit = 10): Promise<FactCheckRecord[]> {
+    const bounded = Math.min(Math.max(Math.trunc(limit), 1), 50);
+    const rows = await this.db
+      .prepare(
+        `SELECT * FROM fact_checks
+         WHERE article_id = ? AND superseded_by IS NULL
+         ORDER BY checked_at DESC
+         LIMIT ?`,
+      )
+      .bind(articleId, bounded)
+      .all<Record<string, unknown>>();
+
+    return rows.results.map(toFactCheck);
+  }
+
   /** Full-text search over checked claims and their one-line summaries.
    *
    *  `superseded_by IS NULL` for the same reason listRecent has it: a

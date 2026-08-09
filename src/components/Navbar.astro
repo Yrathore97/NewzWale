@@ -4,7 +4,8 @@ import { CATEGORIES, RAIL_TOPICS } from '../lib/news/categories';
 
 const currentPath = Astro.url.pathname;
 const isNewsActive = currentPath === '/' || currentPath === '';
-const isVerifyActive = currentPath.startsWith('/verify');
+// /fact-check, not /verify: D8 (permanent 301, /verify no longer serves the page).
+const isVerifyActive = currentPath.startsWith('/fact-check');
 
 const activeCategory = currentPath.startsWith('/category/')
   ? currentPath.split('/')[2]
@@ -44,7 +45,7 @@ const activeCategory = currentPath.startsWith('/category/')
       </a>
 
       <a
-        href="/verify"
+        href="/fact-check"
         aria-current={isVerifyActive ? "page" : undefined}
         class={`px-3 py-1.5 text-xs font-medium rounded-full transition-colors duration-200 ${
           isVerifyActive
@@ -85,7 +86,7 @@ const activeCategory = currentPath.startsWith('/category/')
       </div>
 
       <a
-        href="/verify"
+        href="/fact-check"
         class="px-4 py-1.5 bg-primary-strong hover:bg-primary-pressed text-on-primary text-xs font-semibold rounded-full shadow-stacked-sm transition-colors"
       >
         Verify a Claim
@@ -136,7 +137,7 @@ const activeCategory = currentPath.startsWith('/category/')
     <a href="/" class={`block px-3.5 py-2 rounded-md ${isNewsActive ? 'bg-primary-strong text-on-primary font-bold shadow-stacked-sm' : 'text-ink hover:bg-surface-card'}`}>
       News
     </a>
-    <a href="/verify" class={`block px-3.5 py-2 rounded-md ${isVerifyActive ? 'bg-primary-strong text-on-primary font-bold shadow-stacked-sm' : 'text-primary-strong hover:bg-surface-card'}`}>
+    <a href="/fact-check" class={`block px-3.5 py-2 rounded-md ${isVerifyActive ? 'bg-primary-strong text-on-primary font-bold shadow-stacked-sm' : 'text-primary-strong hover:bg-surface-card'}`}>
       Fact Check
     </a>
 

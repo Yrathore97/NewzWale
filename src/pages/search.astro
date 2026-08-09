@@ -1,0 +1,147 @@
+---
+import Layout from '../layouts/Layout.astro';
+import Navbar from '../components/Navbar.astro';
+import MastheadInfoStrip from '../components/MastheadInfoStrip.astro';
+import ArticleCard from '../components/ArticleCard.astro';
+import Footer from '../components/Footer.astro';
+import type { ApiArticle } from '../lib/news/read';
+import type { FactCheckRecord } from '../lib/db/repositories/fact-checks';
+import type { ApiResponseBody } from '../lib/api/response';
+
+// P5: "/search — Full-text over indexed articles + fact-checks", the
+// documented ?q&type=news|factcheck|all&cursor contract from
+// NEWZWALE_ARCHITECTURE.md §4.2, wired to /api/v1/search.
+export const prerender = false;
+
+const q = (Astro.url.searchParams.get('q') ?? '').trim();
+const type = (['news', 'factcheck', 'all'].includes(Astro.url.searchParams.get('type') ?? '')
+  ? Astro.url.searchParams.get('type')
+  : 'news') as 'news' | 'factcheck' | 'all';
+
+let news: ApiArticle[] = [];
+let factChecks: FactCheckRecord[] = [];
+let error: string | null = null;
+
+if (q) {
+  try {
+    const res = await fetch(
+      new URL(`/api/v1/search?q=${encodeURIComponent(q)}&type=${type}`, Astro.url),
+    );
+    const body = (await res.json()) as ApiResponseBody<
+      ApiArticle[] | FactCheckRecord[] | { news: ApiArticle[]; factChecks: FactCheckRecord[] }
+    >;
+
+    if ('error' in body) {
+      error = body.error.code === 'UPSTREAM_UNAVAILABLE' ? 'Search is not available right now.' : body.error.message;
+    } else if (type === 'factcheck') {
+      factChecks = body.data as FactCheckRecord[];
+    } else if (type === 'all') {
+      const combined = body.data as { news: ApiArticle[]; factChecks: FactCheckRecord[] };
+      news = combined.news;
+      factChecks = combined.factChecks;
+    } else {
+      news = body.data as ApiArticle[];
+    }
+  } catch {
+    error = 'Search is not available right now.';
+  }
+}
+---
+
+<Layout
+  title={q ? `Search: ${q} | NewzWale` : 'Search | NewzWale'}
+  description="Search NewzWale's indexed articles and fact-checks."
+>
+  <Navbar />
+  <MastheadInfoStrip />
+
+  <main id="main" class="flex-1 py-8 bg-surface-soft">
+    <div class="max-w-[1400px] mx-auto px-4 sm:px-6 mb-6">
+      <nav aria-label="Breadcrumb" class="mb-4">
+        <ol class="flex items-center gap-2 text-xs text-mute font-mono-caption">
+          <li><a href="/" class="hover:text-primary-strong">Home</a></li>
+          <li aria-hidden="true">/</li>
+          <li class="text-ink font-semibold">Search</li>
+        </ol>
+      </nav>
+      <h1 class="text-3xl sm:text-4xl font-semibold text-ink tracking-tight mb-4">Search</h1>
+
+      <form method="get" action="/search" class="flex flex-col sm:flex-row gap-2 max-w-2xl">
+        <input
+          type="search"
+          name="q"
+          value={q}
+          placeholder="Search news and fact-checks…"
+          aria-label="Search query"
+          class="flex-1 px-4 py-2.5 bg-surface-elevated border border-hairline rounded-md text-sm text-ink placeholder:text-mute"
+        />
+        <select name="type" aria-label="Search in" class="px-3 py-2.5 bg-surface-elevated border border-hairline rounded-md text-sm text-ink">
+          <option value="news" selected={type === 'news'}>News</option>
+          <option value="factcheck" selected={type === 'factcheck'}>Fact checks</option>
+          <option value="all" selected={type === 'all'}>Both</option>
+        </select>
+        <button type="submit" class="px-6 py-2.5 bg-primary-strong hover:bg-primary-pressed text-on-primary text-sm font-semibold rounded-md shadow-stacked-sm transition-colors">
+          Search
+        </button>
+      </form>
+    </div>
+
+    <div class="max-w-[1400px] mx-auto px-4 sm:px-6 space-y-8">
+      {!q ? (
+        <p class="text-sm opacity-70 text-body">Enter a search term above.</p>
+      ) : error ? (
+        <p class="text-sm text-body bg-surface-elevated border border-hairline rounded-md p-4">{error}</p>
+      ) : (
+        <>
+          {(type === 'news' || type === 'all') && (
+            <section>
+              {type === 'all' && <h2 class="text-lg font-semibold text-ink mb-3">News</h2>}
+              {news.length === 0 ? (
+                <p class="text-sm opacity-70 text-body">No matching articles.</p>
+              ) : (
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+                  {news.map((a) => (
+                    <ArticleCard
+                      article={{
+                        id: a.id,
+                        title: a.title,
+                        url: a.url,
+                        summary: a.summary ?? '',
+                        imageUrl: a.imageUrl,
+                        source: a.source,
+                        category: a.category,
+                        publishedAt: a.publishedAt ?? '',
+                      }}
+                    />
+                  ))}
+                </div>
+              )}
+            </section>
+          )}
+
+          {(type === 'factcheck' || type === 'all') && (
+            <section>
+              {type === 'all' && <h2 class="text-lg font-semibold text-ink mb-3">Fact checks</h2>}
+              {factChecks.length === 0 ? (
+                <p class="text-sm opacity-70 text-body">No matching fact-checks.</p>
+              ) : (
+                <ul class="space-y-3">
+                  {factChecks.map((fc) => (
+                    <li class="p-4 bg-surface-elevated border border-hairline rounded-md">
+                      <a href={`/fact-check/${fc.id}`} class="text-sm font-semibold text-ink hover:text-primary-strong">
+                        {fc.claim}
+                      </a>
+                      <p class="text-xs text-mute mt-1">{fc.summary}</p>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </section>
+          )}
+        </>
+      )}
+    </div>
+  </main>
+
+  <Footer />
+</Layout>

@@ -1,0 +1,147 @@
+---
+import Layout from '../../layouts/Layout.astro';
+import Navbar from '../../components/Navbar.astro';
+import MastheadInfoStrip from '../../components/MastheadInfoStrip.astro';
+import ArticleCard from '../../components/ArticleCard.astro';
+import Footer from '../../components/Footer.astro';
+import { isSafeUrl } from '../../lib/url';
+import type { ApiArticle } from '../../lib/news/read';
+import type { FactCheckRecord } from '../../lib/db/repositories/fact-checks';
+import type { ApiResponseBody } from '../../lib/api/response';
+
+// P5 / AD-09: a STORY PAGE, not a reproduction. Content shape follows AD-09's
+// proposed layout exactly, as adopted verbatim in NEWZWALE_UI_UX_SPEC.md §4.3
+// ("Per architecture AD-09 — a story page, not a reproduction"): headline,
+// publisher, timestamp, an attributed extract (the publisher's own summary,
+// never rewritten), a prominent link to the full story, the coverage
+// cluster ("also reported by"), and linked fact-checks. No article body is
+// hosted, generated, or invented here — README.md and PROGRESS.md's
+// no-hosted-body constraint (D3) is unchanged.
+export const prerender = false;
+
+const { slug } = Astro.params;
+
+interface StoryResponse {
+  article: ApiArticle;
+  coverage: ApiArticle[];
+  factChecks: FactCheckRecord[];
+}
+
+let story: StoryResponse | null = null;
+
+if (slug) {
+  try {
+    const res = await fetch(new URL(`/api/v1/news/${encodeURIComponent(slug)}`, Astro.url));
+    if (res.ok) {
+      const body = (await res.json()) as ApiResponseBody<StoryResponse>;
+      if ('data' in body) story = body.data;
+    }
+  } catch {
+    // story stays null; falls through to 404 below
+  }
+}
+
+// Matches the existing category/[slug].astro:15 pattern: Astro.rewrite('/404')
+// fails under this project's Cloudflare SSR build, so return the 404 status
+// directly instead.
+if (!story) {
+  return new Response(null, { status: 404 });
+}
+
+const { article, coverage, factChecks } = story;
+const readUrl = isSafeUrl(article.url) ? article.url : null;
+---
+
+<Layout
+  title={`${article.title} | NewzWale`}
+  description={article.summary ?? article.title}
+>
+  <Navbar />
+  <MastheadInfoStrip />
+
+  <main id="main" class="flex-1 py-8 bg-surface-soft">
+    <div class="max-w-3xl mx-auto px-4 sm:px-6">
+      <nav aria-label="Breadcrumb" class="mb-4">
+        <ol class="flex items-center gap-2 text-xs text-mute font-mono-caption">
+          <li><a href="/" class="hover:text-primary-strong">Home</a></li>
+          <li aria-hidden="true">/</li>
+          <li><a href="/news" class="hover:text-primary-strong">News</a></li>
+          <li aria-hidden="true">/</li>
+          <li class="text-ink font-semibold truncate max-w-[200px]">{article.title}</li>
+        </ol>
+      </nav>
+
+      <p class="font-mono-caption text-xs text-mute mb-2">
+        {article.category.toUpperCase()} · {article.source}
+        {article.publishedAt && <> · {new Date(article.publishedAt).toLocaleDateString('en-IN', { month: 'short', day: 'numeric', year: 'numeric' })}</>}
+      </p>
+      <h1 class="text-2xl sm:text-4xl font-semibold text-ink tracking-tight leading-tight mb-4">
+        {article.title}
+      </h1>
+
+      {article.imageUrl && (
+        <img src={article.imageUrl} alt="" class="w-full h-64 sm:h-96 object-cover rounded-md mb-4" loading="lazy" />
+      )}
+
+      {article.summary && (
+        <blockquote class="text-base text-body leading-relaxed border-l-4 border-primary-strong pl-4 mb-6">
+          "{article.summary}" <span class="text-xs text-mute not-italic">— {article.source}</span>
+        </blockquote>
+      )}
+
+      {readUrl && (
+        <a
+          href={readUrl}
+          target="_blank"
+          rel="noopener noreferrer"
+          class="inline-block px-6 py-3 bg-primary-strong hover:bg-primary-pressed text-on-primary text-sm font-semibold rounded-md shadow-stacked-sm transition-colors mb-10"
+        >
+          Read the full story at {article.source} ↗
+        </a>
+      )}
+
+      {coverage.length > 0 && (
+        <section class="border-t border-hairline pt-8 mb-10">
+          <h2 class="font-mono-caption text-primary-strong text-xs font-semibold mb-4">ALSO REPORTED BY</h2>
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            {coverage.map((c) => (
+              <ArticleCard
+                article={{
+                  id: c.id,
+                  title: c.title,
+                  url: c.url,
+                  summary: c.summary ?? '',
+                  imageUrl: c.imageUrl,
+                  source: c.source,
+                  category: c.category,
+                  publishedAt: c.publishedAt ?? '',
+                }}
+              />
+            ))}
+          </div>
+        </section>
+      )}
+
+      <section class="border-t border-hairline pt-8">
+        <h2 class="font-mono-caption text-primary-strong text-xs font-semibold mb-4">FACT CHECK</h2>
+        {factChecks.length > 0 ? (
+          <ul class="space-y-3">
+            {factChecks.map((fc) => (
+              <li class="p-4 bg-surface-elevated border border-hairline rounded-md">
+                <a href={`/fact-check/${fc.id}`} class="text-sm font-semibold text-ink hover:text-primary-strong">
+                  {fc.claim}
+                </a>
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <a href="/fact-check" class="text-sm text-primary-strong font-semibold hover:underline">
+            Check a claim from this story →
+          </a>
+        )}
+      </section>
+    </div>
+  </main>
+
+  <Footer />
+</Layout>

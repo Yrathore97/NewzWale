@@ -273,7 +273,11 @@ d('/api/v1/search data path', () => {
   });
 });
 
-d('/api/v1/ticker data path', () => {
+// Renamed from "/api/v1/ticker data path": P5 corrected /api/v1/ticker to be
+// the documented MARKET ticker (NEWZWALE_ARCHITECTURE.md §4.2, S-08), not a
+// headline feed. listRecent() itself is unaffected and still a legitimate
+// repository primitive, so its tests are kept rather than deleted.
+d('ArticleRepository.listRecent', () => {
   it('returns the newest headlines, undated last', async () => {
     const db = makeDb();
     const repo = new ArticleRepository(db);
