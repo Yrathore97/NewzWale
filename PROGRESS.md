@@ -9,6 +9,236 @@ Full task list and rationale: `docs/superpowers/plans/2026-08-05-newzwale-rebuil
 
 ---
 
+## Status — Phase 5A / 5B / 5C + P7 search fallback COMPLETE (uncommitted)
+
+> **Naming.** The plan in `docs/NEWZWALE_IMPLEMENTATION_PLAN.md` uses NUMBERED
+> phases P0–P10. The 5A/5B/5C lettering below came from the working prompts,
+> not from the plan, and there is no "Phase 5D" in any project document. The
+> search work recorded here is **P7 — Search and trending** (its search half).
+> Doc-phase P5 (Routes and IA) is still outstanding: every page shell
+> (`news/index`, `news/[slug]`, `trending`, `search`, `fact-check/*`,
+> `/methodology`), the `/verify` → `/fact-check` 301, the generated sitemap,
+> and `/api/v1/{news/[slug],factcheck,factcheck/[id]}`.
+
+### P7 (search half) — Indic search fallback
+
+Follows the plan's own prescription verbatim
+([NEWZWALE_IMPLEMENTATION_PLAN.md:466](docs/NEWZWALE_IMPLEMENTATION_PLAN.md)):
+"fall back to `LIKE`-based matching for scripts FTS handles poorly rather than
+shipping search that silently fails for 12 of 13 languages." ICU was never an
+option — D1 runs stock SQLite with no loadable extensions.
+
+**Measured first.** Full-word queries turned out to work under FTS5 in *every*
+script. The real failure is STEM queries, which are the normal case in
+agglutinative Indic languages where the postposition attaches to the noun:
+
+| query | printed form | FTS5 | LIKE |
+|---|---|---|---|
+| flood | floods | MISS | HIT |
+| बारिश | बारिश से | HIT | HIT |
+| বৃষ্টি | বৃষ্টিতে | HIT | HIT |
+| கனமழை | கனமழையால் | HIT | HIT |
+| వర్షాల | వర్షాలతో | **MISS** | HIT |
+| కేరళ | కేరళలో | **MISS** | HIT |
+| بارش | بارش سے | HIT | HIT |
+
+So the defect was never "FTS fails on Indic" — it is that FTS is
+**inconsistent between scripts**. Devanagari/Bengali/Tamil get *accidental*
+substring behaviour (the query shatters into the same consonant fragments as
+the text and phrase-matches a prefix), Telugu does not, English gets strict
+token matching. Same user action, different meaning per language.
+
+**Implemented:** `needsLikeFallback()` routes any query containing a non-Latin
+letter to LIKE substring matching; Latin queries stay on the indexed FTS path.
+A Latin allowlist rather than a "bad scripts" blocklist, because forgetting to
+extend a blocklist fails silently for that language. Digits and punctuation
+never move a query off the fast path.
+
+**No migration.** Nothing about the schema changed.
+
+**Security — new surface, closed.** `%` and `_` are LIKE wildcards; unescaped,
+a query of `%` returns every row (measured: 7 of 7 rows, versus 0 escaped) —
+a full-table read from a public endpoint. Terms are now split on any
+non-alphanumeric character, so wildcards cannot reach a pattern at all, and
+`likePattern()` still escapes them as defence in depth. Term count capped at 8.
+
+**Bug found by test:** the LIKE path first split on whitespace only, so
+`मानसून, बाढ़` searched for the literal `%मानसून,%` and found nothing while
+the English equivalent matched — re-introducing the very cross-script
+inconsistency the change removes. Both paths now strip punctuation identically.
+
+**Known cost:** `%term%` cannot use an index, so the LIKE path scans, bounded
+by LIMIT. Fine at current corpus size; the upgrade is a normalised search
+column plus a trigram index, not a smaller LIMIT. Marked `ponytail:` in code.
+
+**Still not done:** English stemming. `flood` does not match `floods` — FTS5's
+porter tokenizer would fix it, but that is a separate decision. Asserted as a
+test so it cannot be mistaken for an accident.
+
+Search stays ordered by **recency, not relevance**: BM25 `rank` exists only on
+the FTS path, so ranking by it would order Latin results by relevance and
+non-Latin results by nothing.
+
+---
+
+## Status — Phase 5A / 5B / 5C COMPLETE (uncommitted)
+
+- **Branch:** `claude/newzwale-phase-5-1a3d8c`
+  (worktree `.claude/worktrees/wonderful-panini-6eac28`)
+- **Phase 4 merge:** `fb1e702` (recovered Phase 4 commit `dfcdd01`)
+- **Verification:** `npm test` **931 pass** (741 after the Phase 4 merge, 769
+  after 5A, 853 after 5B), `npx astro check` **0 errors / 0 warnings / 0
+  hints** (141 files), `npm run build` PASS.
+- **Not deployed.** D1 is still unprovisioned — see "manual step" below.
+
+### 5A — D1 foundation
+
+Phase 4 had already built the repositories, so 5A added only the gaps:
+`getDb()` (one typed narrowing of `NEWZ_DB` instead of a raw cast per call
+site), keyset cursor helpers, `findById`, and FTS-backed `search` on both
+articles and claims. `npm run db:migrate:local` / `:remote` added.
+
+**Measured, not assumed:** FTS5 `unicode61` treats Devanagari and Bengali
+matras as token SEPARATORS, so `मानसून` shatters into `म | नस | न`.
+`remove_diacritics` makes **no difference** — the token list is identical at
+`0` and `2`, correcting the claim in the 0001 comment. Whole-word queries
+still resolve, but matching turns substring-like and BM25 `rank` is computed
+over fragments, so relevance is untrustworthy in those scripts. English is
+unaffected. Pinned by tests; a real fix needs an ICU tokenizer.
+
+### 5B — news persistence
+
+New `src/lib/news/{canonical,cluster,ingest}.ts`. Providers fan out
+concurrently (`Promise.allSettled`) rather than first-success — ingestion wants
+breadth, the read path wants one answer, so `fetchFromChain` is untouched.
+Article identity is `sha256(canonical_url)`; re-ingestion is a no-op.
+
+Clustering is deterministic (no model): category + language + 48 h window,
+stopwords incl. India/government/PM/Delhi/today, ≥3 shared significant tokens,
+Jaccard **≥0.75**. The threshold sits above the worst measured FALSE pair
+(0.714, "Karnataka *hijab*" vs "*mining*" verdict), which is higher than three
+of four true pairs — the distributions overlap and no threshold separates
+them. It therefore under-merges on purpose: a missing "also reported by" beats
+claiming corroboration that does not exist. Both directions are asserted.
+
+RSS image extraction added (`media:content`, `media:thumbnail`, type-checked
+`enclosure`, nested `<image><url>`) — the parser previously hardcoded
+`imageUrl: null` and discarded every publisher image.
+
+Two bugs the tests caught: ingestion using `upsert` would have overwritten
+curated `tier`/`owner_group` on every run (silently downgrading a tier1 source
+and weakening fact-check corroboration) — now `ensureExists`; and splitting on
+`[^\p{L}\p{N}]` shattered Devanagari in slugs and cluster tokens, so every
+Hindi headline would have collided on one slug. `\p{M}` is load-bearing.
+
+### Migration 0002 — `articles.published_at` is now NULLABLE
+
+`0001` declared it NOT NULL, which forced ingestion to either fabricate a date
+or drop the article. Neither is acceptable, so the column was relaxed via a
+table rebuild (SQLite cannot drop NOT NULL in place).
+
+Two hazards, both handled and both asserted:
+- `fact_checks.article_id` is `ON DELETE SET NULL`. A naive `DROP TABLE
+  articles` blanks the article link on published, append-only fact-checks —
+  and the UPDATE trigger does **not** guard it, because `article_id` is
+  deliberately outside its column list. Foreign keys are disabled for the
+  rebuild and `PRAGMA foreign_key_check` runs before they go back on.
+  `defer_foreign_keys` does NOT work here: it only applies inside an explicit
+  transaction and silently does nothing under autocommit. The first draft used
+  it and the test caught the nulled row.
+- `articles_fts` is external-content, keyed on `articles.rowid`, which a
+  rebuild can renumber. The index is rebuilt rather than trusted.
+
+Ingestion now persists undated articles with `published_at = NULL` and reports
+`undatedArticles` in its summary. `ingested_at` remains NOT NULL and never
+stands in for it.
+
+Pagination consequence: `published_at < ?` is NULL for an undated row, so those
+articles would have become unreachable past page 1. All paginated queries sort
+on `COALESCE(published_at, '')` — an ordering key only, never returned — which
+puts undated articles last and restores a total order.
+
+### 5C — API v1
+
+| Route | Backing | Notes |
+|---|---|---|
+| `GET /api/v1/news` | D1 | `?category ?language ?limit ?cursor`; keyset, not OFFSET |
+| `GET /api/v1/search` | D1 FTS | `?q` required + bounded; `?category ?language ?limit ?cursor` |
+| `GET /api/v1/trending` | D1 clusters | `?limit`; published formula below |
+| `GET /api/v1/ticker` | D1 | `?limit`; newest headlines, uncursored |
+| `GET /api/v1/weather` | `request.cf` + Open-Meteo | closes S-09 server half; keyless |
+
+Envelope is the existing `ok()` / `fail()` from `src/lib/api/response.ts`; no
+second format was introduced. `meta.cursor` is present **only** when a further
+page exists, so `'cursor' in meta` is a reliable "has more".
+
+**Cursor semantics.** Opaque base64 of `sortValue \0 id`. NUL because SQLite's
+`DEFAULT (datetime('now'))` writes `YYYY-MM-DD HH:MM:SS` — with a space — so a
+space separator would split the sort value in half. A malformed cursor is a
+`BAD_REQUEST` (400), never a silent restart from page 1, which would leave a
+paging client looping over the first page forever. Cursors are unsigned: both
+fields are only ever bound as SQL parameters, so tampering shifts position in a
+public feed and nothing else.
+
+**Search orders by RECENCY, not relevance** — deliberate, given the Indic
+tokenizer finding above. Ranking a multilingual product by a score sound in
+English and arbitrary in Hindi would be worse than not ranking. Recency is also
+the only total order available, which keyset pagination requires.
+
+**Trending formula, published because readers see it:**
+
+```
+score = log2(1 + independentSources) × 0.5 ^ (ageHours / 12)
+```
+
+with a minimum of 2 independent sources. Breadth is sub-linear (twenty outlets
+to twenty-two is not evidence); recency half-life is 12 h. `articleCount` is
+returned but **not** ranked on — it counts rows, and four outlets running one
+wire story are four rows from one newsroom. No model, no click data: there is
+none, and inventing a popularity proxy would be dishonest. Scored at read time,
+not from the stored `trending_score`, because a decaying score is stale the
+moment it is written.
+
+**Backward compatibility.** `/api/news`, `/api/ticker`, `/api/factcheck`,
+`/verify` and every component are **byte-identical** — verified by `git
+status`. `/api/news` keeps its bare `{articles, nextPage}` shape and still
+reads KV + the provider chain; it was deliberately NOT re-pointed at D1,
+because that changes what the homepage renders and belongs with the UI
+migration. `/api/v1/ticker` is a *different dataset* from `/api/ticker`
+(headlines vs Sensex/Nifty) — the old name was not reused for a new meaning.
+
+**Fallback when D1 is absent** (which is the case today): every D1-backed v1
+route returns `UPSTREAM_UNAVAILABLE` (503) with a message naming no binding,
+path or account detail. Never an empty success envelope, which would say
+"there is no news" instead of "this is not available yet".
+
+### Manual step still required
+
+D1 is unprovisioned; no ID has been invented. To activate:
+
+```
+npx wrangler d1 create newzwale
+```
+
+Paste the returned `database_id` into the commented `d1_databases` block in
+`wrangler.jsonc`, then `npm run db:migrate:remote` (0001, then 0002).
+
+### Open risks
+
+- Indic FTS fragmentation (above) — needs an ICU tokenizer, i.e. a schema
+  migration, and its own evidence.
+- Clustering under-merges by design; raising recall needs entity awareness,
+  not a lower threshold.
+- Cluster stopwords are English-only, so Indic headlines have a weaker
+  over-merge guard.
+- Wire syndication is not collapsed in `source_count` (needs body text we
+  deliberately do not store).
+- S-09 is only half closed: `MastheadInfoStrip.astro` still calls
+  `ipapi.co`, `bigdatacloud.net` and open-meteo from the browser. Deleting
+  those is a UI change for a later phase.
+
+---
+
 ## Status — NewzWale 2.0, Phase 0 (Foundations) COMPLETE
 
 - **Branch:** `claude/install-ui-ux-pro-max-skill-fb49bc`

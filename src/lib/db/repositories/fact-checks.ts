@@ -10,6 +10,7 @@
  *  concatenated into SQL. */
 
 import { requireDb, nowIso, type Db } from '../client';
+import { ftsQuery } from './articles';
 
 /** The six canonical verdicts. Mirrors the CHECK constraint in migration 0001. */
 export type StoredVerdict =
@@ -232,6 +233,32 @@ export class FactCheckRepository {
       .bind(verdict, bounded)
       .all<Record<string, unknown>>();
 
+    return rows.results.map(toFactCheck);
+  }
+
+  /** Full-text search over checked claims and their one-line summaries.
+   *
+   *  `superseded_by IS NULL` for the same reason listRecent has it: a
+   *  superseded verdict was produced by methodology this system no longer
+   *  uses, and surfacing it in search would republish a conclusion we have
+   *  already retracted.
+   *
+   *  Shares `ftsQuery` with article search so both sanitise FTS5 operators
+   *  identically — one escaping rule, not two that can drift apart. */
+  async search(query: string, limit = 20): Promise<FactCheckRecord[]> {
+    const match = ftsQuery(query);
+    if (!match) return [];
+    const bounded = Math.min(Math.max(Math.trunc(limit), 1), 100);
+    const rows = await this.db
+      .prepare(
+        `SELECT c.* FROM claims_fts f
+         JOIN fact_checks c ON c.rowid = f.rowid
+         WHERE claims_fts MATCH ? AND c.superseded_by IS NULL
+         ORDER BY f.rank, c.checked_at DESC
+         LIMIT ?`,
+      )
+      .bind(match, bounded)
+      .all<Record<string, unknown>>();
     return rows.results.map(toFactCheck);
   }
 

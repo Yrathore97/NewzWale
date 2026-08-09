@@ -9,7 +9,7 @@ import { runFactCheck, type FetchedPassage } from '../../lib/factcheck/pipeline'
 import { persistFactCheck } from '../../lib/factcheck/persist';
 import type { FactCheckResult } from '../../lib/factcheck/types';
 import { factCheckCacheKey, normalizeClaim } from '../../lib/cache';
-import { contentId, type Db } from '../../lib/db/client';
+import { contentId, getDb } from '../../lib/db/client';
 import {
   checkRateLimitSafe,
   requestIdentity,
@@ -193,7 +193,7 @@ export const POST: APIRoute = async ({ request }) => {
   const recordId = await contentId(`${normalized}|p${result.pipelineVersion}|e${result.evidenceVersion}`);
 
   const outcome = await persistFactCheck(
-    (env as unknown as { NEWZ_DB?: Db }).NEWZ_DB,
+    getDb(env),
     result,
     {
       id: recordId,

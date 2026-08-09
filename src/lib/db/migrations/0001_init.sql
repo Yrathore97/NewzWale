@@ -342,9 +342,25 @@ CREATE VIRTUAL TABLE IF NOT EXISTS articles_fts USING fts5 (
   summary,
   content = 'articles',
   content_rowid = 'rowid',
-  -- remove_diacritics 2 is needed for Indic scripts. FTS5's default tokenizer
-  -- handles Devanagari/Tamil/Telugu poorly; this must be verified against real
-  -- multilingual content before search ships (implementation plan, Phase 7).
+  -- MEASURED Phase 5A, correcting an earlier note here that claimed
+  -- remove_diacritics 2 was "needed for Indic scripts". It is not: against
+  -- remove_diacritics 0 the Devanagari token list is IDENTICAL. unicode61
+  -- treats Devanagari/Bengali matras as token SEPARATORS either way, so
+  -- 'मानसून' shatters into म | नस | न rather than staying one token.
+  --
+  -- Consequence: whole-word queries still resolve (the query shatters the same
+  -- way and phrase-matches), but matching turns substring-like in those
+  -- scripts and BM25 rank is computed over fragments, so relevance ordering is
+  -- unreliable. English is unaffected.
+  --
+  -- The setting is LEFT AS-IS deliberately: changing it fixes nothing, and
+  -- ICU is not available on D1 (stock SQLite, no loadable extensions).
+  --
+  -- RESOLVED IN PHASE 7, not by changing this tokenizer but by routing around
+  -- it: non-Latin queries use LIKE substring matching instead of FTS, which
+  -- is the fallback the implementation plan prescribes. This index therefore
+  -- serves LATIN queries only. See needsLikeFallback() in
+  -- ../repositories/articles.ts, and tests/db/search-multilingual.test.ts.
   tokenize = "unicode61 remove_diacritics 2"
 );
 
@@ -384,5 +400,5 @@ END;
 --
 -- Declared as a comment rather than a constraint because SQLite cannot ALTER
 -- TABLE ADD CONSTRAINT, and the two tables reference each other. Enforced in
--- the query layer (src/lib/db/queries/) instead.
+-- the repository layer (src/lib/db/repositories/) instead.
 -- ---------------------------------------------------------------------------
