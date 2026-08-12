@@ -3,12 +3,17 @@ import Layout from '../layouts/Layout.astro';
 import Navbar from '../components/Navbar.astro';
 import MastheadInfoStrip from '../components/MastheadInfoStrip.astro';
 import Footer from '../components/Footer.astro';
+import EmptyState from '../components/shared/EmptyState.astro';
 
 // P5: "/saved — Saved articles (today: a drawer) — Local store". Promotes
 // the existing drawer's storage to a full page. Reuses window.NZ.getSaved()/
 // toggleSaved(), defined once in Layout.astro and already used by
 // SavedArticlesDrawer.astro and ArticleCard's save buttons — no new storage
 // schema, no server-side persistence.
+//
+// P6 KEEPS THIS A FULL PAGE per the explicit SAVED decision: the BottomNav
+// "You" destination links here rather than replacing it with a drawer-only
+// view.
 export const prerender = true;
 ---
 
@@ -16,24 +21,30 @@ export const prerender = true;
   <Navbar />
   <MastheadInfoStrip />
 
-  <main id="main" class="flex-1 py-8 bg-surface-soft">
-    <div class="max-w-3xl mx-auto px-4 sm:px-6">
+  <main id="main" class="flex-1 bg-surface-soft py-8">
+    <div class="mx-auto max-w-3xl px-4 sm:px-6">
       <nav aria-label="Breadcrumb" class="mb-4">
-        <ol class="flex items-center gap-2 text-xs text-mute font-mono-caption">
+        <ol class="font-mono-caption flex items-center gap-2 text-mute">
           <li><a href="/" class="hover:text-primary-strong">Home</a></li>
           <li aria-hidden="true">/</li>
-          <li class="text-ink font-semibold">Saved</li>
+          <li class="font-semibold text-ink">Saved</li>
         </ol>
       </nav>
-      <h1 class="text-3xl sm:text-4xl font-semibold text-ink tracking-tight mb-2">Saved Articles</h1>
-      <p class="text-sm text-mute mb-6">
-        Stored on this device only — saving on another browser or device starts a separate list.
+      <h1 class="mb-1 text-3xl font-semibold tracking-tight text-ink sm:text-4xl">Saved articles</h1>
+      <p class="font-mono-caption mb-6 text-mute">
+        Stored on this device only · saving on another browser or device starts a separate list
       </p>
 
-      <p id="saved-page-empty" class="text-sm opacity-70 text-body">
-        You haven't saved any articles yet. Look for the Save button on a news card.
-      </p>
-      <div id="saved-page-list" class="grid grid-cols-1 sm:grid-cols-2 gap-4"></div>
+      <div id="saved-page-empty" hidden>
+        <EmptyState
+          title="Nothing saved yet"
+          description="Look for the Save button on any news card to add it here."
+          actionLabel="Browse the news"
+          actionHref="/news"
+        />
+      </div>
+
+      <div id="saved-page-list" class="grid grid-cols-1 gap-4 sm:grid-cols-2"></div>
     </div>
   </main>
 
@@ -41,6 +52,8 @@ export const prerender = true;
 </Layout>
 
 <script>
+  import { safeHref } from '../lib/url';
+
   const empty = document.getElementById('saved-page-empty');
   const list = document.getElementById('saved-page-list');
 
@@ -48,26 +61,35 @@ export const prerender = true;
     if (!list || !empty) return;
     const saved = window.NZ.getSaved();
     empty.hidden = saved.length > 0;
-    list.innerHTML = '';
+    list.replaceChildren();
 
     for (const article of saved) {
-      const card = document.createElement('div');
-      card.className = 'border border-hairline rounded-md p-4 bg-surface-elevated';
+      const href = safeHref(article.href);
 
-      const link = document.createElement('a');
-      link.href = article.href;
-      link.target = '_blank';
-      link.rel = 'noopener noreferrer';
-      link.className = 'block text-sm font-semibold text-ink mb-2 hover:text-primary-strong';
-      link.textContent = article.headline;
+      const card = document.createElement('div');
+      card.className = 'rounded-sm border border-hairline bg-surface-elevated p-4';
+
+      // An unsafe href (article.href is attacker-writable via any XSS on the
+      // origin, per SavedArticlesDrawer.astro's S-12 note) still shows the
+      // headline; it is just not turned into a clickable link.
+      const title = document.createElement(href ? 'a' : 'p');
+      title.className = 'mb-2 block text-sm font-semibold text-ink';
+      title.textContent = article.headline;
+      if (href && title instanceof HTMLAnchorElement) {
+        title.href = href;
+        title.target = '_blank';
+        title.rel = 'noopener noreferrer';
+        title.classList.add('hover:text-primary-strong');
+      }
 
       const removeBtn = document.createElement('button');
       removeBtn.type = 'button';
-      removeBtn.className = 'text-xs font-medium text-primary-strong bg-transparent border-none cursor-pointer p-0';
+      removeBtn.className =
+        'min-h-11 cursor-pointer border-none bg-transparent p-0 text-xs font-medium text-primary-strong';
       removeBtn.textContent = 'Remove';
       removeBtn.addEventListener('click', () => window.NZ.toggleSaved(article.href, article.headline));
 
-      card.appendChild(link);
+      card.appendChild(title);
       card.appendChild(removeBtn);
       list.appendChild(card);
     }

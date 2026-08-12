@@ -3,8 +3,15 @@ import Layout from '../../layouts/Layout.astro';
 import Navbar from '../../components/Navbar.astro';
 import MastheadInfoStrip from '../../components/MastheadInfoStrip.astro';
 import Footer from '../../components/Footer.astro';
-import type { FactCheckWithEvidence } from '../../lib/db/repositories/fact-checks';
+import VerdictBadge from '../../components/factcheck/VerdictBadge.astro';
+import EvidenceStrengthMeter from '../../components/factcheck/EvidenceStrengthMeter.astro';
+import EvidenceList from '../../components/factcheck/EvidenceList.astro';
+import LimitationsPanel from '../../components/factcheck/LimitationsPanel.astro';
+import ShareResult from '../../components/factcheck/ShareResult.astro';
+import type { EvidenceRecord, FactCheckWithEvidence } from '../../lib/db/repositories/fact-checks';
+import type { Evidence } from '../../lib/factcheck/types';
 import type { ApiResponseBody } from '../../lib/api/response';
+import { VERDICT_PRESENTATION } from '../../lib/ui/verdict';
 
 // P5: "/fact-check/[id] — Permalink to one completed check". Reads
 // /api/v1/factcheck/[id], which reuses FactCheckRepository.findById — the
@@ -32,25 +39,42 @@ if (!result) {
   return new Response(null, { status: 404 });
 }
 
-const { factCheck, evidence } = result;
+const { factCheck, evidence: persistedEvidence } = result;
 
-// Six canonical verdicts (schema.ts / migration 0001 CHECK constraint).
-// Mirrors FactCheckWidget.astro's VERDICTS map so the permalink page and the
-// live checker never disagree about a verdict's label — one vocabulary,
-// referenced twice, not redefined.
-const VERDICTS: Record<string, { label: string; badgeClass: string; icon: string }> = {
-  true: { label: 'True', badgeClass: 'bg-success/15 text-success border border-success/40', icon: '✓' },
-  false: { label: 'False', badgeClass: 'bg-error/15 text-error border border-error/40', icon: '✕' },
-  partly_true: { label: 'Partly true', badgeClass: 'bg-warning/15 text-warning border border-warning/40', icon: '◐' },
-  misleading: { label: 'Misleading', badgeClass: 'bg-warning/25 text-warning border-2 border-warning/60', icon: '⚠' },
-  unverified: { label: 'Not enough evidence', badgeClass: 'bg-surface-card text-mute border border-hairline', icon: '?' },
-  needs_context: { label: 'Needs context', badgeClass: 'bg-primary-strong/10 text-primary-strong border border-primary-strong/40', icon: 'ⓘ' },
+const presentation = VERDICT_PRESENTATION[factCheck.verdict] ?? VERDICT_PRESENTATION.unverified;
+
+/** The persisted stance vocabulary ('supporting'/'contradicting'/'contextual',
+ *  EvidenceRecord) and the live-pipeline vocabulary ('supports'/'contradicts'/
+ *  'neutral'/'unclear', Evidence in schema.ts) are two different, both
+ *  intentional, naming schemes for the same three-way distinction — the D1
+ *  column was named to match DESIGN_DIRECTION §2.3's stance treatment, the
+ *  pipeline type predates that doc. Mapped here, at the render boundary,
+ *  rather than changing either one: this page is presentation, not storage or
+ *  the evidence engine. */
+const STANCE_MAP: Record<EvidenceRecord['stance'], Evidence['stance']> = {
+  supporting: 'supports',
+  contradicting: 'contradicts',
+  contextual: 'neutral',
 };
-const style = VERDICTS[factCheck.verdict] ?? VERDICTS.unverified;
+
+const evidence: Evidence[] = persistedEvidence.map((e) => ({
+  title: e.title,
+  url: e.url,
+  publisher: e.publisher,
+  position: e.position,
+  tier: e.tierAtCheck,
+  stance: STANCE_MAP[e.stance],
+  publishedAt: e.publishedAt,
+  accessedAt: e.accessedAt,
+  quotedPassage: e.quotedPassage ?? undefined,
+  readMethod: e.readMethod,
+  injectionFlagged: e.injectionFlagged,
+  relevant: e.relevance !== 'low',
+}));
 
 // OG tags per verdict: title and description vary with the actual result,
 // so a shared link preview shows what was found rather than a generic label.
-const ogTitle = `${style.label}: ${factCheck.claim} | NewzWale Fact Check`;
+const ogTitle = `${presentation.label}: ${factCheck.claim} | NewzWale Fact Check`;
 const ogDescription = factCheck.summary || factCheck.claim;
 ---
 
@@ -58,64 +82,64 @@ const ogDescription = factCheck.summary || factCheck.claim;
   <Navbar />
   <MastheadInfoStrip />
 
-  <main id="main" class="flex-1 py-8 bg-surface-soft">
-    <div class="max-w-3xl mx-auto px-4 sm:px-6">
+  <main id="main" class="flex-1 bg-surface-soft py-8">
+    <div class="mx-auto max-w-3xl px-4 sm:px-6">
       <nav aria-label="Breadcrumb" class="mb-4">
-        <ol class="flex items-center gap-2 text-xs text-mute font-mono-caption">
+        <ol class="font-mono-caption flex items-center gap-2 text-mute">
           <li><a href="/" class="hover:text-primary-strong">Home</a></li>
           <li aria-hidden="true">/</li>
           <li><a href="/fact-check" class="hover:text-primary-strong">Fact Check</a></li>
           <li aria-hidden="true">/</li>
-          <li class="text-ink font-semibold">Result</li>
+          <li class="font-semibold text-ink">Result</li>
         </ol>
       </nav>
 
-      <p class="text-sm text-mute mb-2">Claim</p>
-      <h1 class="text-xl sm:text-2xl font-semibold text-ink leading-snug mb-4">{factCheck.claim}</h1>
+      <p class="mb-2 text-sm text-mute">Claim</p>
+      <h1 class="mb-4 text-xl font-semibold leading-snug text-ink sm:text-2xl">{factCheck.claim}</h1>
 
-      <div aria-live="polite" class="space-y-6">
-        <span
-          class:list={[
-            'inline-flex items-center gap-1.5 px-4 py-1.5 rounded-full text-xs font-bold uppercase tracking-wider shadow-stacked-sm',
-            style.badgeClass,
-          ]}
+      <div aria-live="polite" class="flex flex-col gap-6">
+        <div
+          class="flex flex-col items-start justify-between gap-3 rounded-sm border border-hairline bg-surface-elevated p-4 sm:flex-row sm:items-center"
         >
-          {style.icon} {style.label}
-        </span>
-
-        {factCheck.basis === 'certified' && evidence[0] && (
-          <p class="text-xs text-mute">Reviewed by {evidence[0].publisher}.</p>
-        )}
-        {factCheck.basis === 'ai_assessment' && (
-          <p class="text-xs text-mute">AI assessment based on the sources below — not a certified fact-check.</p>
-        )}
-
-        <div class="text-sm font-medium text-ink bg-surface-elevated p-4 rounded-md border border-hairline leading-relaxed shadow-stacked-sm">
-          {factCheck.summary}
+          <VerdictBadge verdict={factCheck.verdict} size="large" />
+          <EvidenceStrengthMeter strength={factCheck.evidenceStrength} />
         </div>
 
-        {factCheck.limitations && (
-          <p class="text-xs text-mute">{factCheck.limitations}</p>
-        )}
+        {
+          factCheck.basis === 'certified' && evidence[0] && (
+            <p class="text-sm text-mute">Reviewed by {evidence[0].publisher}.</p>
+          )
+        }
+        {
+          factCheck.basis === 'ai_assessment' && (
+            <p class="text-sm text-mute">
+              AI assessment based on the sources below — not a certified fact-check.
+            </p>
+          )
+        }
 
-        {evidence.length > 0 && (
-          <div>
-            <h2 class="font-mono-caption text-primary-strong text-xs font-semibold mb-3">SOURCES</h2>
-            <ul class="space-y-2">
-              {evidence.map((e) => (
-                <li class="text-sm">
-                  <a href={e.url} target="_blank" rel="noopener noreferrer" class="text-ink hover:text-primary-strong">
-                    {e.title}
-                  </a>
-                  <span class="text-xs text-mute"> — {e.publisher}</span>
-                </li>
-              ))}
-            </ul>
+        <div>
+          <h2 class="font-mono-caption mb-1 text-mute">Summary</h2>
+          <div
+            class="rounded-sm border border-hairline bg-surface-elevated p-4 text-sm font-medium leading-relaxed text-ink shadow-stacked-sm"
+          >
+            {factCheck.summary}
           </div>
-        )}
+        </div>
 
-        <p class="text-xs text-mute pt-4 border-t border-hairline">
-          Checked {new Date(factCheck.checkedAt ?? '').toLocaleDateString('en-IN', { month: 'short', day: 'numeric', year: 'numeric' })}
+        <EvidenceList evidence={evidence} />
+
+        <LimitationsPanel limitations={factCheck.limitations} basis={factCheck.basis} />
+
+        <ShareResult factCheckId={factCheck.id} />
+
+        <p class="border-t border-hairline pt-4 text-xs text-mute">
+          Checked{' '}
+          {new Date(factCheck.checkedAt ?? '').toLocaleDateString('en-IN', {
+            month: 'short',
+            day: 'numeric',
+            year: 'numeric',
+          })}
           · <a href="/methodology" class="underline hover:no-underline">How we checked this</a>
         </p>
       </div>
@@ -124,3 +148,27 @@ const ogDescription = factCheck.summary || factCheck.claim;
 
   <Footer />
 </Layout>
+
+<script>
+  // Successful load of a persisted result is exactly the moment P6's history
+  // decision applies: record it on this device, once, if it is not already
+  // there. The fact-check pipeline and its D1 record are untouched by this —
+  // it only reads what the page already rendered.
+  import { recordFactCheckHistory } from '../../lib/history/factcheck-history';
+
+  const root = document.querySelector('[aria-live="polite"]');
+  const id = window.location.pathname.split('/').filter(Boolean).pop();
+  const verdictEl = root?.querySelector<HTMLElement>('[data-verdict-badge]');
+  const strengthEl = root?.querySelector<HTMLElement>('[data-strength-meter]');
+  const claim = document.querySelector('h1')?.textContent ?? '';
+
+  if (id && verdictEl) {
+    recordFactCheckHistory({
+      id,
+      claim,
+      verdict: verdictEl.dataset.verdict ?? 'unverified',
+      evidenceStrength: strengthEl?.dataset.strength ?? null,
+      checkedAt: new Date().toISOString(),
+    });
+  }
+</script>

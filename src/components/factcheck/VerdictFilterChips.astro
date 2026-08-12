@@ -1,0 +1,78 @@
+---
+import { VERDICT_ORDER, VERDICT_PRESENTATION } from '../../lib/ui/verdict';
+
+/** Verdict filter chips with counts.
+ *
+ *  Toggle buttons, not tabs: they filter a list in place rather than swapping
+ *  panels, so `aria-pressed` is the correct state and the ARIA tabs pattern
+ *  (with its roving tabindex and arrow keys) would be the wrong promise. Each
+ *  chip is a normal tab stop.
+ *
+ *  A chip whose count is zero is DISABLED rather than hidden, so the set of
+ *  possible verdicts stays legible — "no MISLEADING results" is information.
+ */
+interface Props {
+  /** Rendered as a group label for assistive tech. */
+  label?: string;
+  class?: string;
+}
+
+const { label = 'Filter by verdict', class: extraClass = '' } = Astro.props;
+---
+
+<div
+  role="group"
+  aria-label={label}
+  data-verdict-filters
+  class:list={['flex flex-wrap gap-2', extraClass]}
+>
+  <button
+    type="button"
+    data-verdict-filter="all"
+    aria-pressed="true"
+    class="verdict-chip inline-flex min-h-11 cursor-pointer items-center gap-1.5 rounded-full border border-hairline bg-surface-card px-4 text-xs font-semibold text-ink"
+  >
+    All
+    <span class="font-mono" data-verdict-count="all">0</span>
+  </button>
+
+  {
+    VERDICT_ORDER.map((v) => {
+      const p = VERDICT_PRESENTATION[v];
+      return (
+        <button
+          type="button"
+          data-verdict-filter={v}
+          aria-pressed="false"
+          class:list={[
+            'verdict-chip inline-flex min-h-11 cursor-pointer items-center gap-1.5 rounded-full bg-surface-card px-4 text-xs font-semibold text-ink disabled:cursor-not-allowed disabled:opacity-50',
+            p.borderClass,
+          ]}
+        >
+          <span
+            aria-hidden="true"
+            class:list={[
+              'inline-flex h-4 w-4 items-center justify-center rounded-full text-[10px] leading-none',
+              p.glyphClass,
+            ]}
+          >
+            {p.icon}
+          </span>
+          {p.label}
+          <span class="font-mono" data-verdict-count={v}>
+            0
+          </span>
+        </button>
+      );
+    })
+  }
+</div>
+
+<style>
+  /* The pressed state is a filled chip. Combined with aria-pressed it is both
+     visible and announced — the border colour alone would not be either. */
+  .verdict-chip[aria-pressed='true'] {
+    background-color: var(--color-ink);
+    color: var(--color-canvas);
+  }
+</style>

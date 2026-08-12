@@ -34,11 +34,12 @@ describe('securityHeaders — the required set', () => {
     expect(p).toContain('payment=()');
   });
 
-  // geolocation is self rather than () only because MastheadInfoStrip still
-  // requests it. When S-09 lands this should become ().
-  it('restricts geolocation to same-origin rather than allowing all', () => {
-    expect(h['permissions-policy']).toContain('geolocation=(self)');
+  // S-09/A-07 landed in P6: nothing calls navigator.geolocation any more, so
+  // the allowlist is empty rather than same-origin. Tightened, not relaxed.
+  it('denies geolocation outright now that nothing requests it', () => {
+    expect(h['permissions-policy']).toContain('geolocation=()');
     expect(h['permissions-policy']).not.toContain('geolocation=*');
+    expect(h['permissions-policy']).not.toContain('geolocation=(self)');
   });
 
   it('provides clickjacking protection two ways', () => {
@@ -91,16 +92,26 @@ describe('CSP — matches the origins this app actually loads', () => {
     expect(d.get('script-src')).toContain('https://www.googletagmanager.com');
   });
 
-  it('allows Google Fonts CSS and font files, which global.css imports', () => {
-    expect(d.get('style-src')).toContain('https://fonts.googleapis.com');
-    expect(d.get('font-src')).toContain('https://fonts.gstatic.com');
+  // P6 self-hosted Inter and JetBrains Mono into /fonts. These assertions are
+  // deliberately inverted rather than deleted: if anyone reintroduces a Google
+  // Fonts @import, the policy silently blocking it is far harder to debug than
+  // a failing test naming the cause.
+  it('serves fonts from self only, with no Google Fonts origins left', () => {
+    expect(d.get('font-src')).toBe("'self'");
+    expect(d.get('font-src')).not.toContain('fonts.gstatic.com');
+    expect(d.get('style-src')).not.toContain('fonts.googleapis.com');
   });
 
-  it('allows the three client-side APIs MastheadInfoStrip calls', () => {
+  // Inverted in P6 rather than deleted. MastheadInfoStrip used to call these
+  // three from the browser, handing each of them the visitor's IP or precise
+  // coordinates on every page load. Weather now goes through /api/v1/weather,
+  // so a reappearance of any of these origins is a privacy regression and
+  // should fail here by name.
+  it('no longer reaches any third-party location or weather API from the browser', () => {
     const connect = d.get('connect-src')!;
-    expect(connect).toContain('https://api.open-meteo.com');
-    expect(connect).toContain('https://api.bigdatacloud.net');
-    expect(connect).toContain('https://ipapi.co');
+    expect(connect).not.toContain('api.open-meteo.com');
+    expect(connect).not.toContain('api.bigdatacloud.net');
+    expect(connect).not.toContain('ipapi.co');
   });
 
   it('allows GA beacons', () => {

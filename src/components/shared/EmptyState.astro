@@ -1,0 +1,54 @@
+---
+/** "Empty says what is empty" (NEWZWALE_UI_UX_SPEC §1, rule 5).
+ *
+ *  `title` names the specific thing that is empty — "No headlines in Sports
+ *  right now", not "No results". A generic empty state tells the reader nothing
+ *  they could not already see.
+ */
+interface Props {
+  title: string;
+  /** What the feature does, or what to try instead. */
+  description?: string;
+  /** Primary way out of the empty state. */
+  actionLabel?: string;
+  actionHref?: string;
+  /** Secondary note rendered small and muted, e.g. device-local storage. */
+  note?: string;
+  class?: string;
+}
+
+const {
+  title,
+  description,
+  actionLabel,
+  actionHref,
+  note,
+  class: extraClass = '',
+} = Astro.props;
+---
+
+<div
+  class:list={[
+    'flex flex-col items-center justify-center text-center rounded-md border border-dashed border-stone bg-surface-soft px-5 py-10',
+    extraClass,
+  ]}
+>
+  <h3 class="text-base font-semibold text-ink">{title}</h3>
+
+  {description && <p class="mt-2 max-w-prose text-sm leading-relaxed text-body">{description}</p>}
+
+  <slot />
+
+  {
+    actionLabel && actionHref && (
+      <a
+        href={actionHref}
+        class="btn-pill-primary mt-5 inline-flex min-h-11 items-center px-5 text-sm"
+      >
+        {actionLabel}
+      </a>
+    )
+  }
+
+  {note && <p class="font-mono-caption mt-4 text-mute">{note}</p>}
+</div>

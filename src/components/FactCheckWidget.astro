@@ -1,274 +1,296 @@
 ---
+import ClaimInput from './factcheck/ClaimInput.astro';
+import ClaimConfirm from './factcheck/ClaimConfirm.astro';
+import CheckProgress from './factcheck/CheckProgress.astro';
+import VerdictBadge from './factcheck/VerdictBadge.astro';
+import EvidenceStrengthMeter from './factcheck/EvidenceStrengthMeter.astro';
+import ErrorState from './shared/ErrorState.astro';
+
+/** EvidenceList, LimitationsPanel and ShareResult are NOT imported as
+ *  components here. Their markup is instead built client-side in the script
+ *  below, because /api/factcheck's result is one JSON payload rather than a
+ *  server-rendered page — there is nowhere for Astro to render those three
+ *  into. The client renderers below are kept structurally identical to the
+ *  .astro components of the same name; those components are what
+ *  /fact-check/[id].astro (the persisted result page) actually uses. */
+
+/** The fact-check flow: claim → confirm → progress → result.
+ *
+ *  Replaces the previous three-tab widget (Text / URL / Image) with the
+ *  single-input flow from NEWZWALE_UI_UX_SPEC §5. Steps are plain sections
+ *  toggled by `hidden`, not an ARIA tabs pattern — they are sequential stages
+ *  of one task, not independently selectable views, so `tablist`/`tab` would
+ *  have been the wrong semantics (that mismatch is exactly what the previous
+ *  widget's incomplete tablist got wrong per audit A-02).
+ *
+ *  PIPELINE UNCHANGED. This posts to the same /api/factcheck the previous
+ *  widget used — same validation, rate limiting, evidence retrieval, six
+ *  verdicts, persistence. Nothing here re-implements or alters any of that;
+ *  it only presents the result.
+ *
+ *  SECURITY UNCHANGED: every evidence field is written with
+ *  createElement/textContent, and every href goes through the same
+ *  safe-scheme check used elsewhere in the codebase. No innerHTML.
+ */
 ---
-<section id="fact-checker" class="w-full py-12 bg-canvas border-b border-hairline transition-colors duration-200">
-  <div class="max-w-[1400px] mx-auto px-4 sm:px-6">
-    <div class="max-w-4xl mx-auto">
 
-      <!-- Section Header -->
-      <div class="flex flex-col items-center text-center mb-8">
-        <span class="font-mono-caption text-primary-strong mb-2 font-semibold">FACT CHECK ENGINE</span>
-        <h2 class="text-2xl sm:text-4xl font-semibold text-ink tracking-[-1.28px] mb-3">
-          Instant News Verification
-        </h2>
-        <p class="text-sm sm:text-base text-body max-w-xl">
-          NewzWale checks claims against published fact-checkers first, then live web sources, and only issues a verdict when the evidence supports one.
-        </p>
+<section
+  id="fact-checker"
+  class="w-full border-b border-hairline bg-canvas py-8 transition-colors duration-200 sm:py-12"
+>
+  <div class="mx-auto max-w-3xl px-4 sm:px-6">
+    <div class="rounded-md border border-hairline bg-surface-soft p-4 shadow-stacked-md sm:p-6">
+      <ClaimInput />
+      <ClaimConfirm />
+      <CheckProgress />
+
+      <p id="factcheck-error-wrap" hidden>
+        <ErrorState
+          title="Couldn't check that claim"
+          description="The verification service did not return a result. Your claim has not been lost — try again."
+          retryTarget="factcheck"
+        />
+      </p>
+
+      <!-- Result. aria-live so a screen-reader user hears the verdict land
+           without having to go looking for it (UI/UX spec §7 "new"). -->
+      <div id="factcheck-result" hidden aria-live="polite" class="mt-6 flex flex-col gap-6 border-t border-hairline pt-6">
+        <div
+          class="flex flex-col items-start justify-between gap-3 rounded-sm border border-hairline bg-surface-elevated p-4 sm:flex-row sm:items-center"
+        >
+          <!-- Side by side, equal weight: a TRUE on weak evidence must not
+               look like a TRUE on strong evidence (UI/UX spec §5.4). -->
+          <div id="result-verdict-slot"></div>
+          <div id="result-strength-slot"></div>
+        </div>
+
+        <p id="result-basis-note" class="text-sm text-mute"></p>
+
+        <div>
+          <h3 class="font-mono-caption mb-1 text-mute">Summary</h3>
+          <p
+            id="result-summary"
+            class="rounded-sm border border-hairline bg-surface-elevated p-4 text-sm font-medium leading-relaxed text-ink shadow-stacked-sm"
+          ></p>
+        </div>
+
+        <div id="result-evidence-slot"></div>
+        <div id="result-limitations-slot"></div>
+        <div id="result-share-slot"></div>
       </div>
-
-      <!-- Verification Tool Panel -->
-      <div class="bg-surface-soft border border-hairline rounded-lg p-4 sm:p-6 shadow-stacked-md">
-
-        <!-- Input Tabs -->
-        <div role="tablist" aria-label="Fact check input type" class="flex items-center gap-2 border-b border-hairline pb-3 mb-4 overflow-x-auto text-xs font-medium">
-          <button type="button" role="tab" id="tab-text" aria-controls="panel-text" aria-selected="true" data-tab="text" class="tab-btn active px-3 py-1.5 font-semibold text-ink bg-surface-elevated border border-hairline rounded-full shadow-stacked-sm focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-strong">
-            <span aria-hidden="true">📝</span> Text / Claim
-          </button>
-          <button type="button" role="tab" id="tab-url" aria-controls="panel-url" aria-selected="false" data-tab="url" class="tab-btn px-3 py-1.5 text-body hover:text-ink rounded-full focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-strong">
-            <span aria-hidden="true">🔗</span> Article URL
-          </button>
-          <button type="button" role="tab" id="tab-image" aria-controls="panel-image" aria-selected="false" data-tab="image" class="tab-btn px-3 py-1.5 text-body hover:text-ink rounded-full focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-strong">
-            <span aria-hidden="true">🖼️</span> Image / Screenshot
-          </button>
-        </div>
-
-        <!-- Input Area -->
-        <div id="input-container" class="space-y-3 mb-4">
-          <div id="panel-text" role="tabpanel" aria-labelledby="tab-text" class="tab-panel space-y-3">
-            <label for="claim-text" class="sr-only">Headline or claim to fact check</label>
-            <textarea
-              id="claim-text"
-              rows="3"
-              autocomplete="off"
-              placeholder="Paste news headline or claim to verify (e.g. 'RBI keeps repo rate steady at 6.5%')"
-              class="w-full bg-surface-elevated border border-hairline rounded-md p-3 text-sm text-ink placeholder:text-mute focus:outline-none focus:ring-1 focus:ring-primary-strong resize-none"
-            ></textarea>
-
-            <!-- Pre-set Quick Demos -->
-            <div class="flex items-center gap-2 overflow-x-auto pb-1 text-xs">
-              <span class="text-mute font-mono-caption text-[10px] shrink-0">Try Demos:</span>
-              <button type="button" class="demo-prompt-btn px-2.5 py-1 bg-surface-elevated border border-hairline hover:border-primary rounded-full text-body transition-colors shrink-0">
-                "RBI Repo Rate FY27"
-              </button>
-              <button type="button" class="demo-prompt-btn px-2.5 py-1 bg-surface-elevated border border-hairline hover:border-primary rounded-full text-body transition-colors shrink-0">
-                "Viral WhatsApp 2000 Note Bank Holiday"
-              </button>
-              <button type="button" class="demo-prompt-btn px-2.5 py-1 bg-surface-elevated border border-hairline hover:border-primary rounded-full text-body transition-colors shrink-0">
-                "ISRO INSAT-3DS Satellite Launch"
-              </button>
-            </div>
-          </div>
-
-          <div id="panel-url" role="tabpanel" aria-labelledby="tab-url" class="tab-panel" hidden>
-            <label for="claim-url" class="sr-only">Article URL to fact check</label>
-            <input
-              id="claim-url"
-              type="url"
-              inputmode="url"
-              autocomplete="url"
-              spellcheck="false"
-              placeholder="https://example.com/article-to-check"
-              class="w-full bg-surface-elevated border border-hairline rounded-md p-3 text-sm text-ink placeholder:text-mute focus:outline-none focus:ring-1 focus:ring-primary-strong"
-            />
-          </div>
-
-          <div id="panel-image" role="tabpanel" aria-labelledby="tab-image" class="tab-panel" hidden>
-            <p class="text-sm text-mute p-4 bg-surface-elevated border border-dashed border-hairline rounded-md text-center">
-              Image / screenshot checking is coming soon.
-            </p>
-          </div>
-        </div>
-
-        <!-- Verification Action Button -->
-        <div class="flex items-center justify-between">
-          <div class="flex items-center gap-2 text-xs text-mute">
-            <svg class="w-3.5 h-3.5 text-primary-strong" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"></path></svg>
-            Checks published fact-checkers, then live web sources
-          </div>
-
-          <button
-            type="button"
-            id="verify-submit-btn"
-            class="px-5 py-2.5 bg-primary-strong hover:bg-primary-pressed text-on-primary text-xs font-bold rounded-md shadow-stacked-sm transition-colors flex items-center gap-2 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ink"
-          >
-            <span id="btn-spinner" class="hidden w-3.5 h-3.5 border-2 border-on-primary border-t-transparent rounded-full animate-spin" aria-hidden="true"></span>
-            <span id="verify-submit-label">Check Claim</span>
-          </button>
-        </div>
-
-        <!-- Error state -->
-        <p id="verify-error" role="alert" class="hidden mt-4 text-xs text-error bg-error/10 border border-error/30 rounded-md p-3"></p>
-
-        <!-- Output Verdict Card -->
-        <div id="verdict-card" aria-live="polite" class="hidden mt-6 pt-6 border-t border-hairline animate-fade-in space-y-6">
-
-          <div class="flex flex-col sm:flex-row items-start sm:items-center gap-3 p-4 rounded-md bg-surface-elevated border border-hairline">
-            <span id="verdict-badge" class="inline-flex items-center gap-1.5 px-4 py-1.5 rounded-full text-xs font-bold uppercase tracking-wider shadow-stacked-sm">
-              <!-- Injected via JS -->
-            </span>
-            <div id="verdict-basis-note" class="text-xs text-mute"></div>
-          </div>
-
-          <!-- Short Verdict Explanation -->
-          <div>
-            <h4 class="text-xs font-mono-caption text-mute mb-1">EXPLANATION</h4>
-            <div id="verdict-short-answer" class="text-sm font-medium text-ink bg-surface-elevated p-4 rounded-md border border-hairline leading-relaxed shadow-stacked-sm">
-              <!-- Injected via JS -->
-            </div>
-          </div>
-
-          <!-- Sources -->
-          <div>
-            <h4 class="text-xs font-mono-caption text-mute mb-2">SOURCES CHECKED</h4>
-            <div id="sources-list" class="grid grid-cols-1 sm:grid-cols-2 gap-2">
-              <!-- Injected via JS -->
-            </div>
-          </div>
-
-        </div>
-
-      </div>
-
     </div>
   </div>
 </section>
 
+<!-- Fillable templates, cloned by the script below. Keeps the result markup
+     identical to what the standalone result page renders, per component. -->
+<VerdictBadge asTemplate templateId="tpl-verdict-badge" size="large" />
+<EvidenceStrengthMeter asTemplate templateId="tpl-strength-meter" />
+
 <script>
-  const buttons = document.querySelectorAll<HTMLButtonElement>('.tab-btn');
-  const panels = document.querySelectorAll<HTMLElement>('.tab-panel');
-  const submitBtn = document.getElementById('verify-submit-btn') as HTMLButtonElement;
-  const claimText = document.getElementById('claim-text') as HTMLTextAreaElement;
-  const claimUrl = document.getElementById('claim-url') as HTMLInputElement;
-  const verdictCard = document.getElementById('verdict-card');
-  const verdictBadge = document.getElementById('verdict-badge');
-  const verdictBasisNote = document.getElementById('verdict-basis-note');
-  const verdictShortAnswer = document.getElementById('verdict-short-answer');
-  const sourcesList = document.getElementById('sources-list');
-  const btnSpinner = document.getElementById('btn-spinner');
-  const submitLabel = document.getElementById('verify-submit-label');
-  const errorBox = document.getElementById('verify-error');
+  import { safeHref } from '../lib/url';
+  import { recordFactCheckHistory } from '../lib/history/factcheck-history';
 
-  let activeTab: 'text' | 'url' | 'image' = 'text';
+  type Verdict =
+    | 'true'
+    | 'false'
+    | 'partly_true'
+    | 'misleading'
+    | 'unverified'
+    | 'needs_context';
 
-  // The pill look is plain Tailwind utilities, not a `.tab-btn.active` CSS
-  // rule - so switching tabs has to move these classes itself, not just an
-  // inert "active" flag, or the highlight never leaves the first tab.
-  const ACTIVE_CLASSES = ['font-semibold', 'text-ink', 'bg-surface-elevated', 'border', 'border-hairline', 'shadow-stacked-sm'];
-  const INACTIVE_CLASSES = ['text-body', 'hover:text-ink'];
-
-  buttons.forEach((btn) => {
-    btn.addEventListener('click', () => {
-      const tab = btn.getAttribute('data-tab') as 'text' | 'url' | 'image';
-      activeTab = tab;
-      buttons.forEach((b) => {
-        const isActive = b === btn;
-        b.classList.toggle('active', isActive);
-        b.classList.remove(...ACTIVE_CLASSES, ...INACTIVE_CLASSES);
-        b.classList.add(...(isActive ? ACTIVE_CLASSES : INACTIVE_CLASSES));
-        b.setAttribute('aria-selected', String(isActive));
-      });
-      panels.forEach((p) => { p.hidden = p.id !== `panel-${tab}`; });
-      submitBtn.disabled = tab === 'image';
-    });
-  });
-
-  document.querySelectorAll('.demo-prompt-btn').forEach((btn) => {
-    btn.addEventListener('click', (e) => {
-      const prompt = (e.target as HTMLElement).innerText.replace(/"/g, '');
-      if (prompt.includes('RBI Repo Rate')) {
-        claimText.value = "RBI keeps repo rate unchanged at 6.5% for FY27 projecting 7.2% GDP growth.";
-      } else if (prompt.includes('WhatsApp')) {
-        claimText.value = "Emergency bank holiday declared across India starting tomorrow for 3 days due to currency audit.";
-      } else {
-        claimText.value = "ISRO successfully launches INSAT-3DS weather satellite from Sriharikota.";
-      }
-    });
-  });
-
-  // KEY MAPPING ONLY — no visual redesign. The UI is locked until the design
-  // direction is approved.
-  //
-  // This had to change: /api/factcheck now returns the six canonical wire
-  // values, and the old map keyed on 'verified'/'insufficient_evidence'. An
-  // unmatched key fell through to the insufficient_evidence entry, so a TRUE
-  // verdict rendered as "Not enough evidence to judge" — the API telling the
-  // truth and the interface contradicting it.
-  //
-  // Styling reuses EXISTING tokens; no new colours are introduced. The final
-  // treatment (including the unresolved brand-coral vs MISLEADING-orange
-  // collision, and the WCAG requirement that verdicts never rely on colour
-  // alone) belongs to NEWZWALE_DESIGN_DIRECTION.md.
-  const VERDICTS: Record<string, { label: string; badgeClass: string; icon: string }> = {
-    true: { label: 'True', badgeClass: 'bg-success/15 text-success border border-success/40', icon: '✓' },
-    false: { label: 'False', badgeClass: 'bg-error/15 text-error border border-error/40', icon: '✕' },
-    partly_true: { label: 'Partly true', badgeClass: 'bg-warning/15 text-warning border border-warning/40', icon: '◐' },
-    misleading: { label: 'Misleading', badgeClass: 'bg-warning/25 text-warning border-2 border-warning/60', icon: '⚠' },
-    unverified: { label: 'Not enough evidence', badgeClass: 'bg-surface-card text-mute border border-hairline', icon: '?' },
-    needs_context: { label: 'Needs context', badgeClass: 'bg-primary-strong/10 text-primary-strong border border-primary-strong/40', icon: 'ⓘ' },
-  };
-
-  // Evidence URLs originate from third-party APIs (Tavily, Google Fact Check).
-  // The server already filters them, but this is the last line before the
-  // value reaches `a.href`, where a `javascript:` URL would be script
-  // execution in the user's session. Both sides check: "the evidence provider
-  // was compromised" is precisely the threat model an evidence-first product
-  // has to survive. Mirrors isSafeUrl in src/lib/url.ts.
-  function isSafeHref(value: string): boolean {
-    try {
-      const { protocol } = new URL(value);
-      return protocol === 'http:' || protocol === 'https:';
-    } catch {
-      return false;
-    }
+  interface Evidence {
+    title: string;
+    url: string;
+    publisher: string;
+    tier?: 'tier1' | 'tier2' | 'tier3';
+    stance?: 'supports' | 'contradicts' | 'neutral' | 'unclear';
+    publishedAt?: string | null;
+    accessedAt?: string;
+    quotedPassage?: string;
+    readMethod?: 'full_page' | 'search_snippet';
+    injectionFlagged?: boolean;
+    relevant?: boolean;
+    position?: number;
   }
 
-  function renderSources(evidence: { title: string; url: string; publisher: string }[]) {
-    if (!sourcesList) return;
-    sourcesList.innerHTML = '';
-    if (evidence.length === 0) {
-      const p = document.createElement('p');
-      p.className = 'text-xs text-mute col-span-2';
-      p.textContent = 'No sources to show.';
-      sourcesList.appendChild(p);
+  interface FactCheckResult {
+    verdict?: Verdict;
+    explanation?: string;
+    basis?: 'certified' | 'ai_assessment' | 'none';
+    evidence?: Evidence[];
+    id?: string;
+    claim?: string;
+    evidenceStrength?: 'strong' | 'moderate' | 'weak' | 'none';
+    summary?: string;
+    limitations?: string[];
+  }
+
+  // ── Elements ──────────────────────────────────────────────────────────
+  const inputStep = document.getElementById('claim-input-step');
+  const confirmStep = document.getElementById('claim-confirm-step');
+  const progress = document.getElementById('check-progress');
+  const progressLive = document.getElementById('check-progress-live');
+  const errorWrap = document.getElementById('factcheck-error-wrap');
+  const resultBox = document.getElementById('factcheck-result');
+
+  const claimInput = document.getElementById('claim-input') as HTMLTextAreaElement | null;
+  const claimTypeNote = document.getElementById('claim-type-note');
+  const submitBtn = document.getElementById('claim-submit');
+  const pasteBtn = document.getElementById('claim-paste') as HTMLButtonElement | null;
+
+  const confirmText = document.getElementById('claim-confirm-text');
+  const confirmOrigin = document.getElementById('claim-confirm-origin');
+  const confirmOriginHost = document.getElementById('claim-confirm-origin-host');
+  const confirmEdit = document.getElementById('claim-confirm-edit') as HTMLTextAreaElement | null;
+  const confirmGo = document.getElementById('claim-confirm-go');
+  const confirmEditBtn = document.getElementById('claim-confirm-edit-btn');
+  const confirmBack = document.getElementById('claim-confirm-back');
+
+  // ── Detect: URL vs text. Never asks the reader to classify their input. ──
+  function detect(raw: string): { source: 'url' | 'text'; value: string } {
+    const trimmed = raw.trim();
+    try {
+      const url = new URL(trimmed);
+      if (url.protocol === 'http:' || url.protocol === 'https:') {
+        return { source: 'url', value: trimmed };
+      }
+    } catch {
+      /* not a URL */
+    }
+    return { source: 'text', value: trimmed };
+  }
+
+  // A short typed claim is already its own confirmation; only a URL or a long
+  // paragraph gets the confirmation step (UI/UX spec §5.2).
+  const CONFIRM_MIN_CHARS = 140;
+
+  let pendingSource: 'url' | 'text' = 'text';
+
+  function showStep(step: 'input' | 'confirm' | 'progress' | 'result' | 'error') {
+    if (inputStep) inputStep.hidden = step !== 'input';
+    if (confirmStep) confirmStep.hidden = step !== 'confirm';
+    if (progress) progress.hidden = step !== 'progress';
+    if (errorWrap) errorWrap.hidden = step !== 'error';
+    if (resultBox) resultBox.hidden = step !== 'result';
+  }
+
+  // ── Demo prompts ──
+  for (const btn of document.querySelectorAll<HTMLButtonElement>('.demo-prompt-btn')) {
+    btn.addEventListener('click', () => {
+      if (claimInput) {
+        claimInput.value = btn.dataset.demoClaim ?? '';
+        claimInput.focus();
+      }
+    });
+  }
+
+  // ── Paste from clipboard ──
+  if (pasteBtn && claimInput && navigator.clipboard && 'readText' in navigator.clipboard) {
+    pasteBtn.hidden = false;
+    pasteBtn.addEventListener('click', async () => {
+      try {
+        const text = await navigator.clipboard.readText();
+        if (text.trim()) {
+          claimInput.value = text.trim().slice(0, 2000);
+          claimInput.focus();
+        }
+      } catch {
+        if (claimTypeNote) claimTypeNote.textContent = 'Clipboard access was blocked. Paste with Ctrl+V instead.';
+      }
+    });
+  }
+
+  // Live "URL detected" note as the reader types, so the interpretation is
+  // visible before they even submit.
+  claimInput?.addEventListener('input', () => {
+    if (!claimTypeNote) return;
+    const { source } = detect(claimInput.value);
+    claimTypeNote.textContent =
+      claimInput.value.trim() && source === 'url' ? 'Link detected — we will read the article.' : '';
+  });
+
+  function goToConfirmOrCheck() {
+    if (!claimInput) return;
+    const { source, value } = detect(claimInput.value);
+    if (!value) {
+      if (claimTypeNote) claimTypeNote.textContent = 'Enter a claim, headline or link to check.';
+      claimInput.focus();
       return;
     }
-    for (const e of evidence) {
-      const linkable = isSafeHref(e.url);
 
-      // An unsafe URL still gets its source listed - suppressing it entirely
-      // would hide from the reader that the check read something it could not
-      // vouch for. It is rendered as inert text rather than a clickable link.
-      const a = document.createElement(linkable ? 'a' : 'div');
-      if (linkable && a instanceof HTMLAnchorElement) {
-        a.href = e.url;
-        a.target = '_blank';
-        a.rel = 'noopener noreferrer';
+    pendingSource = source;
+
+    if (source === 'url' || value.length >= CONFIRM_MIN_CHARS) {
+      if (confirmText) confirmText.textContent = value;
+      if (confirmEdit) confirmEdit.value = value;
+      if (confirmOrigin && confirmOriginHost) {
+        if (source === 'url') {
+          confirmOrigin.hidden = false;
+          try {
+            confirmOriginHost.textContent = new URL(value).hostname;
+          } catch {
+            confirmOriginHost.textContent = value;
+          }
+        } else {
+          confirmOrigin.hidden = true;
+        }
       }
-      a.className = 'p-3 bg-surface-elevated border border-hairline rounded-md hover:border-primary transition-colors flex items-center justify-between gap-2 group';
-
-      const title = document.createElement('span');
-      title.className = 'font-medium text-ink group-hover:text-primary-strong';
-      title.textContent = e.title;
-
-      const publisher = document.createElement('span');
-      publisher.className = 'font-mono text-[10px] text-mute shrink-0';
-      publisher.textContent = linkable ? `${e.publisher} ↗` : `${e.publisher} (link withheld)`;
-
-      a.appendChild(title);
-      a.appendChild(publisher);
-      sourcesList.appendChild(a);
+      confirmEdit?.setAttribute('hidden', '');
+      confirmText?.parentElement?.removeAttribute('hidden');
+      showStep('confirm');
+      (document.getElementById('claim-confirm-go') as HTMLElement | null)?.focus();
+    } else {
+      runCheck(value, source);
     }
   }
 
-  submitBtn?.addEventListener('click', async () => {
-    const body =
-      activeTab === 'url' ? { url: claimUrl.value.trim() } : { claim: claimText.value.trim() };
-    if (('url' in body && !body.url) || ('claim' in body && !body.claim)) return;
+  submitBtn?.addEventListener('click', goToConfirmOrCheck);
 
-    btnSpinner?.classList.remove('hidden');
-    submitBtn.disabled = true;
-    if (submitLabel) submitLabel.textContent = 'Checking…';
-    errorBox?.classList.add('hidden');
-    verdictCard?.classList.add('hidden');
+  confirmBack?.addEventListener('click', () => showStep('input'));
+
+  confirmEditBtn?.addEventListener('click', () => {
+    if (!confirmEdit || !confirmText) return;
+    const editing = confirmEdit.hidden;
+    confirmEdit.hidden = !editing;
+    confirmText.parentElement?.toggleAttribute('hidden', Boolean(editing));
+    if (editing) confirmEdit.focus();
+  });
+
+  confirmGo?.addEventListener('click', () => {
+    const finalText =
+      confirmEdit && !confirmEdit.hidden ? confirmEdit.value.trim() : (confirmText?.textContent ?? '').trim();
+    if (!finalText) return;
+    // Editing free-text always resubmits as a claim, even if the original
+    // input was a URL — the reader has now told us the claim in words.
+    const source = confirmEdit && !confirmEdit.hidden ? 'text' : pendingSource;
+    runCheck(finalText, source as 'url' | 'text');
+  });
+
+  // ── Staged progress. See CheckProgress.astro for why this is not a fake
+  //    animated percentage: the API is one request/response, so stages are
+  //    resolved from the RESULT, not ticked against a timer. ──
+  function setStage(id: string, state: 'pending' | 'running' | 'done' | 'skipped', detail?: string) {
+    const li = progress?.querySelector<HTMLElement>(`[data-stage="${id}"]`);
+    if (!li) return;
+    li.dataset.state = state;
+    const icon = li.querySelector('[data-stage-icon]');
+    if (icon) icon.textContent = state === 'done' ? '✓' : state === 'running' ? '◐' : state === 'skipped' ? '–' : '○';
+    const detailEl = li.querySelector('[data-stage-detail]');
+    if (detailEl) detailEl.textContent = detail ?? '';
+  }
+
+  function announce(text: string) {
+    if (progressLive) progressLive.textContent = text;
+  }
+
+  async function runCheck(value: string, source: 'url' | 'text') {
+    showStep('progress');
+    for (const id of ['certified', 'search', 'read', 'weigh', 'verdict']) setStage(id, 'pending');
+    setStage('certified', 'running');
+    announce('Checking published fact-checkers.');
+
+    const body = source === 'url' ? { url: value } : { claim: value };
 
     try {
       const res = await fetch('/api/factcheck', {
@@ -276,53 +298,375 @@
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),
       });
-      const data = (await res.json()) as {
-        verdict?: string;
-        explanation?: string;
-        basis?: string;
-        evidence?: { title: string; url: string; publisher: string }[];
-        error?: string;
-      };
+      const data = (await res.json()) as FactCheckResult & { error?: string };
 
       if (!res.ok) {
-        if (errorBox) {
-          errorBox.textContent = data.error || 'Could not check that claim.';
-          errorBox.classList.remove('hidden');
-        }
+        showStep('error');
+        const desc = document.querySelector('#factcheck-error-wrap [data-nz-retry], #factcheck-error-wrap p');
+        if (desc) desc.textContent = data.error || 'Could not check that claim.';
         return;
       }
 
-      // Unknown verdict falls back to "not enough evidence" — the only safe
-      // default. Never assume a verdict the server did not send.
-      const style = VERDICTS[data.verdict ?? ''] ?? VERDICTS.unverified;
-      if (verdictBadge) {
-        verdictBadge.className = `inline-flex items-center gap-1.5 px-4 py-1.5 rounded-full text-xs font-bold uppercase tracking-wider shadow-stacked-sm ${style.badgeClass}`;
-        verdictBadge.textContent = `${style.icon} ${style.label}`;
+      // Every stage the API result implies actually ran resolves to done;
+      // nothing is ticked that the response gives no evidence for.
+      setStage('certified', data.basis === 'certified' ? 'done' : 'skipped', data.basis === 'certified' ? 'Match found' : undefined);
+      const evidenceCount = data.evidence?.length ?? 0;
+      setStage('search', evidenceCount > 0 ? 'done' : 'skipped', evidenceCount > 0 ? `${evidenceCount} found` : 'No sources found');
+      const readFull = (data.evidence ?? []).filter((e) => e.readMethod === 'full_page').length;
+      setStage('read', evidenceCount > 0 ? 'done' : 'skipped', evidenceCount > 0 ? `${readFull} of ${evidenceCount} read in full` : undefined);
+      setStage('weigh', 'done');
+      setStage('verdict', 'done');
+      announce('Check complete.');
+
+      renderResult(data);
+      showStep('result');
+      resultBox?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+
+      // P6 HISTORY decision: written only here, after a check has SUCCEEDED —
+      // never on the error path above, never mid-flight. data.id is absent
+      // only when the pipeline could not persist a record at all, in which
+      // case there is nothing stable to link a history row to.
+      if (data.id) {
+        recordFactCheckHistory({
+          id: data.id,
+          claim: data.claim || value,
+          verdict: data.verdict ?? 'unverified',
+          evidenceStrength: data.evidenceStrength ?? null,
+        });
       }
-
-      if (verdictBasisNote) {
-        if (data.basis === 'certified') {
-          verdictBasisNote.textContent = `Reviewed by ${data.evidence?.[0]?.publisher ?? 'a published fact-checker'}.`;
-        } else if (data.basis === 'ai_assessment') {
-          verdictBasisNote.textContent = 'AI assessment based on the sources below — not a certified fact-check.';
-        } else {
-          verdictBasisNote.textContent = '';
-        }
-      }
-
-      if (verdictShortAnswer) verdictShortAnswer.textContent = data.explanation || '';
-      renderSources(data.evidence ?? []);
-
-      verdictCard?.classList.remove('hidden');
     } catch {
-      if (errorBox) {
-        errorBox.textContent = 'Verification service unavailable right now.';
-        errorBox.classList.remove('hidden');
+      showStep('error');
+    }
+  }
+
+  // ── Render result from cloned templates + safe DOM building ──
+  function cloneTemplate(id: string): DocumentFragment | null {
+    const tpl = document.getElementById(id) as HTMLTemplateElement | null;
+    return tpl ? (tpl.content.cloneNode(true) as DocumentFragment) : null;
+  }
+
+  function renderVerdictBadge(container: HTMLElement, verdict: string) {
+    const frag = cloneTemplate('tpl-verdict-badge');
+    if (!frag) return;
+    const badge = frag.querySelector<HTMLElement>('[data-verdict-badge]');
+    badge?.setAttribute('data-verdict', verdict);
+    container.replaceChildren(frag);
+    // The presentation (icon/label/colour classes) is baked into the cloned
+    // markup already, per verdict, by VerdictBadge.astro rendering six
+    // variants server-side would be wasteful — instead we swap the class list
+    // client-side using the same lib/ui/verdict data.
+    applyVerdictPresentation(container, verdict);
+  }
+
+  // Mirrors src/lib/ui/verdict.ts. Duplicated here deliberately: that module
+  // is server-only (.astro imports it at build time), and this is the one
+  // client script in the whole app that needs the same table at runtime. Any
+  // change to verdict presentation must be made in BOTH places — the
+  // dedicated test suite for this file (tests/factcheck/… widget tests) is
+  // what catches drift.
+  const PRESENTATION: Record<
+    string,
+    { label: string; icon: string; borderClass: string; glyphClass: string; description: string }
+  > = {
+    true: { label: 'TRUE', icon: '✓', borderClass: 'border border-success', glyphClass: 'bg-success text-canvas', description: 'True — supported by reliable evidence, as stated.' },
+    false: { label: 'FALSE', icon: '✕', borderClass: 'border border-error', glyphClass: 'bg-error text-canvas', description: 'False — contradicted by reliable evidence.' },
+    partly_true: { label: 'PARTLY TRUE', icon: '◐', borderClass: 'border border-warning', glyphClass: 'bg-warning text-canvas', description: 'Partly true — some of the claim holds and some does not.' },
+    misleading: { label: 'MISLEADING', icon: '⚠', borderClass: 'border-2 border-verdict-misleading', glyphClass: 'text-verdict-misleading', description: 'Misleading — the facts check out but the framing does not.' },
+    unverified: { label: 'UNVERIFIED', icon: '?', borderClass: 'border-2 border-mute', glyphClass: 'text-mute', description: 'Unverified — we could not establish this claim either way.' },
+    needs_context: { label: 'NEEDS CONTEXT', icon: 'ⓘ', borderClass: 'border-2 border-verdict-context', glyphClass: 'text-verdict-context', description: 'Needs context — established, but incomplete without a qualification.' },
+  };
+
+  function applyVerdictPresentation(container: HTMLElement, verdict: string) {
+    const p = PRESENTATION[verdict] ?? PRESENTATION.unverified;
+    const badge = container.querySelector<HTMLElement>('[data-verdict-badge]');
+    if (!badge) return;
+    badge.className = `inline-flex items-center gap-2 rounded-sm bg-surface-card font-semibold uppercase tracking-wide text-ink px-4 py-2.5 text-sm ${p.borderClass}`;
+    const glyph = badge.querySelector<HTMLElement>('[data-verdict-glyph]');
+    if (glyph) {
+      glyph.className = `inline-flex items-center justify-center rounded-full leading-none h-6 w-6 text-sm ${p.glyphClass}`;
+      glyph.textContent = p.icon;
+    }
+    const label = badge.querySelector('[data-verdict-label]');
+    if (label) label.textContent = p.label;
+    const desc = badge.querySelector('[data-verdict-description]');
+    if (desc) desc.textContent = `— ${p.description}`;
+  }
+
+  const STRENGTH: Record<string, { label: string; filled: number; description: string }> = {
+    strong: { label: 'Strong', filled: 4, description: 'Multiple independent, high-quality sources agree.' },
+    moderate: { label: 'Moderate', filled: 3, description: 'Corroborated, but by fewer or less independent sources.' },
+    weak: { label: 'Weak', filled: 2, description: 'Thin or single-source evidence.' },
+    none: { label: 'None', filled: 0, description: 'No usable evidence was found.' },
+  };
+
+  function renderStrength(container: HTMLElement, strength: string) {
+    const frag = cloneTemplate('tpl-strength-meter');
+    if (!frag) return;
+    const s = STRENGTH[strength] ?? STRENGTH.none;
+    const meter = frag.querySelector<HTMLElement>('[data-strength-meter]');
+    meter?.setAttribute('data-strength', strength);
+    const segments = frag.querySelectorAll<HTMLElement>('[data-strength-segment]');
+    segments.forEach((seg, i) => {
+      const filled = i < s.filled;
+      seg.dataset.filled = String(filled);
+      seg.className = `h-2.5 w-5 rounded-[2px] border ${filled ? 'border-ink bg-ink' : 'border-stone bg-transparent'}`;
+    });
+    const label = frag.querySelector('[data-strength-label]');
+    if (label) label.textContent = s.label;
+    const desc = frag.querySelector('[data-strength-description]');
+    if (desc) desc.textContent = `Evidence strength: ${s.label}. ${s.description}`;
+    container.replaceChildren(frag);
+  }
+
+  function renderEvidenceList(container: HTMLElement, evidence: Evidence[]) {
+    container.replaceChildren();
+
+    const heading = document.createElement('div');
+    heading.className = 'mb-2 flex flex-wrap items-baseline justify-between gap-2 border-b border-hairline pb-2';
+    const h2 = document.createElement('h2');
+    h2.className = 'text-lg font-semibold text-ink';
+    h2.textContent = `Evidence (${evidence.length})`;
+    heading.appendChild(h2);
+    container.appendChild(heading);
+
+    if (evidence.length === 0) {
+      const empty = document.createElement('p');
+      empty.className = 'rounded-sm border border-hairline bg-surface-soft p-4 text-sm text-body';
+      empty.textContent =
+        'No usable sources were found. That is why the verdict is what it is — it is a result, not a missing section.';
+      container.appendChild(empty);
+      return;
+    }
+
+    const list = document.createElement('ul');
+    list.className = 'flex flex-col divide-y divide-hairline-soft';
+
+    const STANCE_BORDER: Record<string, string> = {
+      supports: 'border-l-success',
+      contradicts: 'border-l-error',
+      neutral: 'border-l-mute',
+      unclear: 'border-l-stone',
+    };
+    const STANCE_LABEL: Record<string, string> = {
+      supports: 'Supports the claim',
+      contradicts: 'Contradicts the claim',
+      neutral: 'Context only',
+      unclear: 'Unclear',
+    };
+
+    const sorted = [...evidence].sort((a, b) => (a.position ?? 0) - (b.position ?? 0));
+
+    sorted.forEach((e, i) => {
+      const stance = e.stance ?? 'unclear';
+      const li = document.createElement('li');
+      li.className = `border-l-[3px] py-4 pl-4 ${STANCE_BORDER[stance] ?? STANCE_BORDER.unclear}`;
+
+      const meta = document.createElement('div');
+      meta.className = 'flex flex-wrap items-center gap-x-2 gap-y-1';
+
+      const pos = document.createElement('span');
+      pos.className = 'font-mono text-sm font-bold text-mute';
+      pos.textContent = `[${e.position ?? i + 1}]`;
+
+      const pub = document.createElement('span');
+      pub.className = 'text-sm font-semibold text-ink';
+      pub.textContent = e.publisher;
+
+      const stanceEl = document.createElement('span');
+      stanceEl.className = 'font-mono-caption rounded-full border border-hairline bg-surface-card px-2 py-0.5 text-mute';
+      stanceEl.textContent = STANCE_LABEL[stance] ?? STANCE_LABEL.unclear;
+
+      meta.appendChild(pos);
+      meta.appendChild(pub);
+      meta.appendChild(stanceEl);
+      li.appendChild(meta);
+
+      const dates = document.createElement('p');
+      dates.className = 'font-mono-caption mt-1.5 text-mute';
+      const publishedLabel = formatEvidenceDate(e.publishedAt) ?? 'Date unknown';
+      let dateText = `Published ${publishedLabel}`;
+      const accessedLabel = formatEvidenceDate(e.accessedAt);
+      if (accessedLabel) dateText += ` · Accessed ${accessedLabel}`;
+      dateText += ` · ${e.readMethod === 'full_page' ? 'Read in full' : 'Snippet only'}`;
+      dates.textContent = dateText;
+      li.appendChild(dates);
+
+      const title = document.createElement('p');
+      title.className = 'mt-2 text-[15px] font-medium leading-snug text-ink';
+      title.textContent = e.title;
+      li.appendChild(title);
+
+      if (e.quotedPassage) {
+        const quote = document.createElement('blockquote');
+        quote.className = 'mt-2 border-l-2 border-hairline pl-3 text-sm italic leading-relaxed text-body';
+        quote.textContent = e.quotedPassage;
+        li.appendChild(quote);
       }
-    } finally {
-      btnSpinner?.classList.add('hidden');
-      submitBtn.disabled = activeTab === 'image';
-      if (submitLabel) submitLabel.textContent = 'Check Claim';
+
+      if (e.injectionFlagged) {
+        const flag = document.createElement('p');
+        flag.className = 'mt-2 text-xs font-semibold text-error';
+        flag.textContent = '⚠ This page contained text attempting to influence the assessment. It was ignored.';
+        li.appendChild(flag);
+      }
+
+      if (e.relevant === false) {
+        const note = document.createElement('p');
+        note.className = 'mt-2 text-xs text-mute';
+        note.textContent =
+          'Read, but it does not materially address the claim — it did not count toward corroboration.';
+        li.appendChild(note);
+      }
+
+      const linkP = document.createElement('p');
+      linkP.className = 'mt-2';
+      const href = safeHref(e.url);
+      if (href) {
+        const a = document.createElement('a');
+        a.href = href;
+        a.target = '_blank';
+        a.rel = 'noopener noreferrer';
+        a.className = 'inline-flex min-h-11 items-center text-sm font-semibold text-primary-strong';
+        a.textContent = 'Open source ↗';
+        linkP.appendChild(a);
+      } else {
+        const span = document.createElement('span');
+        span.className = 'font-mono-caption text-mute';
+        span.textContent = 'Link withheld — the source URL did not pass validation';
+        linkP.appendChild(span);
+      }
+      li.appendChild(linkP);
+
+      list.appendChild(li);
+    });
+
+    container.appendChild(list);
+  }
+
+  function formatEvidenceDate(value?: string | null): string | null {
+    if (!value) return null;
+    const t = Date.parse(value);
+    if (Number.isNaN(t)) return null;
+    return new Date(t).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' });
+  }
+
+  function renderLimitations(container: HTMLElement, limitations: string[] | undefined, basis: string | undefined) {
+    container.replaceChildren();
+    const panel = document.createElement('section');
+    panel.className = 'rounded-sm border border-hairline bg-surface-soft p-4 sm:p-5';
+
+    const h2 = document.createElement('h2');
+    h2.className = 'text-base font-semibold text-ink';
+    h2.textContent = 'Limitations';
+    panel.appendChild(h2);
+
+    const basisNote = document.createElement('p');
+    basisNote.className = 'mt-1.5 text-sm leading-relaxed text-body';
+    basisNote.textContent =
+      basis === 'certified'
+        ? 'This verdict follows a published fact-checker’s own rating.'
+        : basis === 'ai_assessment'
+          ? 'This is an AI assessment over the sources listed above, not a certified fact-check.'
+          : 'Nothing was established, so no verdict is asserted.';
+    panel.appendChild(basisNote);
+
+    const list = document.createElement('ul');
+    list.className = 'mt-3 flex list-disc flex-col gap-1.5 pl-5 text-sm leading-relaxed text-body';
+    const items = [
+      ...(limitations ?? []).filter((l) => typeof l === 'string' && l.trim() !== ''),
+      'Sources were read at the time of the check; a page can change afterwards.',
+      'Coverage is limited to sources reachable and readable from the public web.',
+    ];
+    for (const l of items) {
+      const li = document.createElement('li');
+      li.textContent = l;
+      list.appendChild(li);
+    }
+    panel.appendChild(list);
+
+    container.appendChild(panel);
+  }
+
+  function renderShare(container: HTMLElement, id: string | undefined) {
+    container.replaceChildren();
+    if (!id) return;
+
+    const wrap = document.createElement('div');
+    wrap.className = 'flex flex-wrap items-center gap-2';
+    wrap.dataset.factcheckId = id;
+
+    const copyBtn = document.createElement('button');
+    copyBtn.type = 'button';
+    copyBtn.className = 'btn-pill-secondary inline-flex min-h-11 cursor-pointer items-center px-4 text-sm';
+    copyBtn.textContent = 'Copy link';
+
+    const status = document.createElement('span');
+    status.setAttribute('role', 'status');
+    status.setAttribute('aria-live', 'polite');
+    status.className = 'font-mono-caption text-mute';
+
+    copyBtn.addEventListener('click', async () => {
+      const url = new URL(`/fact-check/${id}`, window.location.origin).toString();
+      try {
+        await navigator.clipboard.writeText(url);
+        status.textContent = 'Link copied.';
+      } catch {
+        status.textContent = `Copy this link: ${url}`;
+      }
+    });
+
+    const open = document.createElement('a');
+    open.href = `/fact-check/${id}`;
+    open.className = 'inline-flex min-h-11 items-center px-2 text-sm font-semibold text-primary-strong';
+    open.textContent = 'Open the full result ↗';
+
+    wrap.appendChild(copyBtn);
+    wrap.appendChild(open);
+    wrap.appendChild(status);
+    container.appendChild(wrap);
+  }
+
+  function renderResult(data: FactCheckResult) {
+    const verdictSlot = document.getElementById('result-verdict-slot');
+    const strengthSlot = document.getElementById('result-strength-slot');
+    const basisNote = document.getElementById('result-basis-note');
+    const summary = document.getElementById('result-summary');
+    const evidenceSlot = document.getElementById('result-evidence-slot');
+    const limitationsSlot = document.getElementById('result-limitations-slot');
+    const shareSlot = document.getElementById('result-share-slot');
+
+    if (verdictSlot) renderVerdictBadge(verdictSlot, data.verdict ?? 'unverified');
+    if (strengthSlot) renderStrength(strengthSlot, data.evidenceStrength ?? 'none');
+
+    if (basisNote) {
+      basisNote.textContent =
+        data.basis === 'certified'
+          ? `Reviewed by ${data.evidence?.[0]?.publisher ?? 'a published fact-checker'}.`
+          : data.basis === 'ai_assessment'
+            ? 'AI assessment based on the sources below — not a certified fact-check.'
+            : '';
+    }
+
+    if (summary) summary.textContent = data.summary || data.explanation || '';
+    if (evidenceSlot) renderEvidenceList(evidenceSlot, data.evidence ?? []);
+    if (limitationsSlot) renderLimitations(limitationsSlot, data.limitations, data.basis);
+    if (shareSlot) renderShare(shareSlot, data.id);
+  }
+
+  // ── Retry from the error state re-runs the last submitted value. ──
+  document.addEventListener('click', (event) => {
+    const target = event.target;
+    if (!(target instanceof HTMLElement)) return;
+    if (target.closest('[data-nz-retry="factcheck"]')) {
+      showStep('input');
     }
   });
+
+  // ── Arrived from the homepage hero with ?claim= ──
+  const params = new URLSearchParams(window.location.search);
+  const initial = params.get('claim');
+  if (initial && claimInput) {
+    claimInput.value = initial.slice(0, 2000);
+    goToConfirmOrCheck();
+  }
 </script>

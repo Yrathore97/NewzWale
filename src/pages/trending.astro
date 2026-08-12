@@ -3,6 +3,8 @@ import Layout from '../layouts/Layout.astro';
 import Navbar from '../components/Navbar.astro';
 import MastheadInfoStrip from '../components/MastheadInfoStrip.astro';
 import Footer from '../components/Footer.astro';
+import TrendingList from '../components/news/TrendingList.astro';
+import ErrorState from '../components/shared/ErrorState.astro';
 import type { ApiStory } from '../lib/news/read';
 import type { ApiResponseBody } from '../lib/api/response';
 
@@ -52,29 +54,18 @@ try {
     </div>
 
     <div class="max-w-4xl mx-auto px-4 sm:px-6">
-      {dbUnavailable ? (
-        <p class="text-sm text-body bg-surface-elevated border border-hairline rounded-md p-4">
-          Trending data is not available right now. Please check back shortly.
-        </p>
-      ) : stories.length === 0 ? (
-        <p class="text-sm opacity-70 text-body">
-          Not enough coverage yet to rank stories. Check back once more sources have reported.
-        </p>
-      ) : (
-        <ol class="space-y-3">
-          {stories.map((s, i) => (
-            <li class="flex items-start gap-4 p-4 bg-surface-elevated border border-hairline rounded-md">
-              <span class="font-mono-caption text-mute text-lg w-6 shrink-0">{i + 1}</span>
-              <div>
-                <h2 class="text-base font-semibold text-ink leading-snug">{s.headline}</h2>
-                <p class="text-xs text-mute mt-1">
-                  Reported by {s.sourceCount} independent {s.sourceCount === 1 ? 'source' : 'sources'}
-                </p>
-              </div>
-            </li>
-          ))}
-        </ol>
-      )}
+      {
+        dbUnavailable ? (
+          <ErrorState
+            title="Trending data isn't available right now"
+            description="The ranking service did not respond."
+            retryLabel="Reload"
+            retryHref="/trending"
+          />
+        ) : (
+          <TrendingList stories={stories} />
+        )
+      }
     </div>
   </main>
 

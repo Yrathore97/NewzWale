@@ -1,0 +1,55 @@
+---
+import type { Evidence } from '../../lib/factcheck/types';
+import EvidenceItem from './EvidenceItem.astro';
+import EmptyState from '../shared/EmptyState.astro';
+
+/** "Evidence is the interface."
+ *
+ *  On any fact-check screen the evidence occupies more space than the verdict;
+ *  a badge is a summary, not an answer (UI/UX spec §1 rule 1). Nothing here is
+ *  collapsed by default and contradicting items are NOT separated out — they
+ *  sit in the same list, in position order, with the same treatment.
+ */
+interface Props {
+  evidence: Evidence[];
+  class?: string;
+}
+
+const { evidence, class: extraClass = '' } = Astro.props;
+
+const items = [...evidence].sort((a, b) => (a.position ?? 0) - (b.position ?? 0));
+
+const supporting = items.filter((e) => e.stance === 'supports').length;
+const contradicting = items.filter((e) => e.stance === 'contradicts').length;
+---
+
+<section class:list={['w-full', extraClass]} aria-labelledby="evidence-heading">
+  <div class="mb-2 flex flex-wrap items-baseline justify-between gap-2 border-b border-hairline pb-2">
+    <h2 id="evidence-heading" class="text-lg font-semibold text-ink">
+      Evidence
+      <span data-evidence-count class="font-mono-caption text-mute">({items.length})</span>
+    </h2>
+    {
+      items.length > 0 && (
+        <p data-evidence-split class="font-mono-caption text-mute">
+          {supporting} supporting · {contradicting} contradicting
+        </p>
+      )
+    }
+  </div>
+
+  {
+    items.length === 0 ? (
+      <EmptyState
+        title="No usable sources were found"
+        description="Nothing we could read addressed this claim. That is why the verdict is what it is — it is a result, not a missing section."
+      />
+    ) : (
+      <ul data-evidence-list class="flex flex-col divide-y divide-hairline-soft">
+        {items.map((e, i) => (
+          <EvidenceItem evidence={e} index={e.position ?? i + 1} />
+        ))}
+      </ul>
+    )
+  }
+</section>

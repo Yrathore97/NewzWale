@@ -9,23 +9,25 @@
  *    BROWSER-SIDE, and therefore in scope for CSP
  *      www.googletagmanager.com   gtag.js                Layout.astro:41
  *      www.google-analytics.com   GA beacons             (gtag.js sends here)
- *      fonts.googleapis.com       font CSS               global.css:1 @import
- *      fonts.gstatic.com          font files             (referenced by that CSS)
- *      api.open-meteo.com         weather                MastheadInfoStrip:124
- *      api.bigdatacloud.net       reverse geocode        MastheadInfoStrip:163
- *      ipapi.co                   IP geolocation         MastheadInfoStrip:185
  *      <any https>                publisher thumbnails   ArticleCard.astro:27
+ *
+ *    REMOVED IN P6
+ *      fonts.googleapis.com       font CSS      - fonts now self-hosted
+ *      fonts.gstatic.com          font files    - see src/styles/fonts.css
+ *      api.open-meteo.com         weather       - moved to /api/v1/weather
+ *      api.bigdatacloud.net       reverse geocode  - no longer called at all
+ *      ipapi.co                   IP geolocation   - no longer called at all
  *
  *    SERVER-SIDE ONLY, and therefore NOT in the CSP - these are Worker
  *    fetches, which CSP does not govern:
  *      newsdata.io, content.guardianapis.com, api.tavily.com,
  *      factchecktools.googleapis.com, query1.finance.yahoo.com, RSS feeds
  *
- *  The three MastheadInfoStrip origins are a privacy finding in their own
- *  right (NEWZWALE_SECURITY_AUDIT.md S-09: they receive the visitor's IP and
- *  precise coordinates). They are allowed here because removing them is a
- *  behaviour change to the weather feature, tracked separately. Closing S-09
- *  also shortens this policy - that is the point of writing it down. */
+ *  S-09 IS NOW CLOSED. Those three origins each received the visitor's IP or
+ *  precise coordinates on every page load. P6 moved the weather lookup to
+ *  /api/v1/weather, which derives a city-level position from `request.cf`
+ *  inside the Worker, so the browser talks only to us. The policy got shorter,
+ *  which is exactly what writing the inventory down was for. */
 
 export interface CspOptions {
   /** Report-Only emits violations without blocking. Always ship this way
@@ -59,21 +61,18 @@ export function buildCsp({ reportOnly = true, reportUri }: CspOptions = {}): str
     // Tailwind emits a stylesheet, but inline style attributes are used for
     // dynamic values (e.g. the saved-articles drawer transform), so
     // 'unsafe-inline' here is genuinely required rather than provisional.
-    "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
+    "style-src 'self' 'unsafe-inline'",
 
-    'font-src https://fonts.gstatic.com',
+    // Self-only since P6: Inter and JetBrains Mono are served from
+    // /fonts/*.woff2 (src/styles/fonts.css). The Google Fonts @import that used
+    // to sit at global.css:1 is gone, and with it two third-party origins.
+    "font-src 'self'",
 
     // Publisher thumbnails are arbitrary https origins. data: covers inline
     // SVG placeholders.
     "img-src 'self' data: https:",
 
-    [
-      "connect-src 'self'",
-      'https://www.google-analytics.com',
-      'https://api.open-meteo.com',
-      'https://api.bigdatacloud.net',
-      'https://ipapi.co',
-    ].join(' '),
+    "connect-src 'self' https://www.google-analytics.com",
 
     // Nothing in this application embeds or is embedded.
     "frame-ancestors 'none'",
@@ -122,11 +121,13 @@ export function securityHeaders({
     // http downgrades get nothing.
     'referrer-policy': 'strict-origin-when-cross-origin',
 
-    // Deny by default. geolocation is 'self' rather than empty ONLY because
-    // MastheadInfoStrip currently requests it for the weather widget; that
-    // call is itself a finding (S-09) and this should become () when it goes.
+    // Deny by default, geolocation included. Nothing in the application calls
+    // navigator.geolocation any more: MastheadInfoStrip used to, with no user
+    // gesture (A-07), and P6 removed that call along with the third-party
+    // weather fetches. An empty allowlist means the prompt cannot appear even
+    // if a future component asks for it by mistake.
     'permissions-policy': [
-      'geolocation=(self)',
+      'geolocation=()',
       'camera=()',
       'microphone=()',
       'payment=()',

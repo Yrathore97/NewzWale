@@ -1,0 +1,57 @@
+---
+import type { ApiArticle } from '../../lib/news/read';
+import { safeHref } from '../../lib/url';
+import { formatPublished } from '../../lib/news/feed';
+
+/** "Also reported by" — the rest of the story cluster.
+ *
+ *  Coverage breadth is one of the two things that make a NewzWale story page
+ *  different from a link. It is rendered only when other independent reports
+ *  actually exist; an empty "Also reported by" heading would imply we checked
+ *  and found the story uncorroborated, which is not what an empty cluster
+ *  means.
+ */
+interface Props {
+  coverage: ApiArticle[];
+  class?: string;
+}
+
+const { coverage, class: extraClass = '' } = Astro.props;
+
+const items = coverage.filter((a) => safeHref(a.url) !== null);
+---
+
+{
+  items.length > 0 && (
+    <section class:list={['w-full', extraClass]} aria-labelledby="coverage-heading">
+      <h2
+        id="coverage-heading"
+        class="font-mono-caption mb-3 border-b border-hairline pb-2 text-mute"
+      >
+        Also reported by · {items.length}
+      </h2>
+
+      <ul class="flex flex-col">
+        {items.map((a) => (
+          <li class="border-b border-hairline-soft last:border-b-0">
+            <a
+              href={safeHref(a.url)!}
+              target="_blank"
+              rel="noopener noreferrer"
+              class="flex min-h-11 flex-col justify-center gap-1 py-3"
+            >
+              <span class="font-mono-caption text-mute">
+                {a.source}
+                {/* publishedAt is nullable on purpose: the column is nullable
+                    precisely so a genuinely unknown date is rendered as
+                    unknown rather than back-filled with "now". */}
+                {a.publishedAt ? ` · ${formatPublished(a.publishedAt)}` : ' · date unknown'}
+              </span>
+              <span class="text-[15px] font-medium leading-snug text-ink">{a.title}</span>
+            </a>
+          </li>
+        ))}
+      </ul>
+    </section>
+  )
+}

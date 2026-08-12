@@ -4,7 +4,21 @@ import { prepareArticles } from '../lib/news/feed';
 import { DEFAULT_CATEGORY } from '../lib/news/categories';
 import { DEFAULT_LANGUAGE, LANGUAGES } from '../lib/news/languages';
 import ArticleCard from './ArticleCard.astro';
+import ArticleGrid from './news/ArticleGrid.astro';
+import EmptyState from './shared/EmptyState.astro';
+import ErrorState from './shared/ErrorState.astro';
 
+/** The headline grid, plus the "Load more" path.
+ *
+ *  The client-side `buildCard()` that used to live at the bottom of this file
+ *  is GONE. It was a 95-line hand-rolled duplicate of ArticleCard.astro, and it
+ *  had already drifted: different image height, different summary size, no
+ *  save button on imageless cards. Along with it went local copies of
+ *  `formatPublished` and `isSafeUrl`, which existed in `lib/` the whole time.
+ *
+ *  Appended cards are now clones of a <template> rendered by ArticleCard
+ *  itself, so the server path and the client path cannot diverge again.
+ */
 interface Props {
   category?: string;
   language?: string;
@@ -25,6 +39,9 @@ const MAX_CARDS = 24;
 
 let articles: Article[] = [];
 let nextPage: string | null = null;
+/** Distinguishes "the feed is empty" from "the request failed". The two need
+ *  different copy: one is a state of the world, the other is our fault. */
+let failed = false;
 
 try {
   const res = await fetch(
@@ -37,9 +54,11 @@ try {
     const page = (await res.json()) as NewsPage;
     articles = page.articles ?? [];
     nextPage = page.nextPage ?? null;
+  } else {
+    failed = true;
   }
 } catch {
-  /* leave empty; the template renders an empty state */
+  failed = true;
 }
 
 const exclude = new Set(excludeUrls);
@@ -49,66 +68,83 @@ articles = prepareArticles(articles, MAX_CARDS).filter((a) => !exclude.has(a.url
 // site's own UI text - this note is the one place that says so out loud,
 // rather than leaving a first-time switcher to infer it from a hover title.
 const languageName = LANGUAGES.find((l) => l.code === language)?.name ?? language;
+const categoryLabel = category === DEFAULT_CATEGORY ? 'this feed' : category;
 ---
 
-<section id="news-feed" class="w-full py-12 bg-surface-soft transition-colors duration-200">
-  <div class="max-w-[1400px] mx-auto px-4 sm:px-6">
-    <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6 border-b border-hairline pb-4">
+<section id="news-feed" class="w-full bg-surface-soft py-10 transition-colors duration-200">
+  <div class="mx-auto max-w-[1400px] px-4 sm:px-6">
+    <div
+      class="mb-6 flex flex-col justify-between gap-3 border-b border-hairline pb-4 md:flex-row md:items-center"
+    >
       <div>
-        <div class="flex items-center gap-2 mb-1">
-          <span class="w-2 h-2 rounded-full bg-primary animate-pulse"></span>
-          <span id="feed-type-badge" class="font-mono-caption text-mute">LIVE HEADLINE STREAM</span>
-        </div>
-        <h2 class="text-2xl sm:text-3xl font-semibold text-ink tracking-[-0.96px]">{heading}</h2>
-        {language !== DEFAULT_LANGUAGE && (
-          <p class="text-xs text-mute mt-1">
-            Showing headlines in {languageName} — site menus and buttons stay in English.
-          </p>
-        )}
+        <span id="feed-type-badge" class="font-mono-caption text-mute">Live headline stream</span>
+        <h2 class="text-2xl font-semibold tracking-[-0.96px] text-ink sm:text-3xl">{heading}</h2>
+        {
+          language !== DEFAULT_LANGUAGE && (
+            <p class="mt-1 text-xs text-mute">
+              Showing headlines in {languageName} — site menus and buttons stay in English.
+            </p>
+          )
+        }
       </div>
-
-      {articles.length > 0 && (
-        <div class="flex items-center gap-2">
-          <span class="px-3 py-1 bg-surface-elevated border border-hairline rounded-full text-xs font-semibold text-primary-strong flex items-center gap-1.5 shadow-stacked-sm">
-            <span>Headlines from publisher feeds</span>
-          </span>
-        </div>
-      )}
     </div>
 
-    {articles.length === 0 ? (
-      <p class="text-sm opacity-70 text-body">
-        Headlines are temporarily unavailable. Please check back shortly.
-      </p>
-    ) : (
-      <>
-        <div id="articles-grid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-          {articles.map((article) => <ArticleCard article={article} />)}
-        </div>
+    {
+      failed ? (
+        <ErrorState
+          title="Couldn't load headlines"
+          description="The headline feed did not respond. Your connection is fine if the rest of this page loaded."
+          retryLabel="Reload headlines"
+          retryHref={Astro.url.pathname + Astro.url.search}
+        />
+      ) : articles.length === 0 ? (
+        <EmptyState
+          title={`No headlines in ${categoryLabel} right now`}
+          description="Publisher feeds for this selection returned nothing in the current window. Other categories are still updating."
+          actionLabel="Browse all categories"
+          actionHref="/news"
+        />
+      ) : (
+        <>
+          <ArticleGrid id="articles-grid">
+            {articles.map((article) => (
+              <ArticleCard article={article} />
+            ))}
+          </ArticleGrid>
 
-        <div class="mt-8 flex flex-col items-center gap-3">
-          <button
-            id="load-more"
-            type="button"
-            hidden={!nextPage}
-            data-next-page={nextPage ?? ''}
-            data-category={category}
-            data-language={language}
-            class="px-6 py-2.5 bg-ink hover:bg-charcoal text-canvas text-sm font-semibold rounded-md shadow-stacked-sm transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
-          >
-            Load more headlines
-          </button>
-          <p id="load-more-status" role="status" aria-live="polite" class="text-xs text-mute"></p>
-        </div>
-      </>
-    )}
+          {/* The one card template, rendered by ArticleCard itself. */}
+          <ArticleCard asTemplate templateId="article-card-template" />
+
+          <div class="mt-8 flex flex-col items-center gap-3">
+            <button
+              id="load-more"
+              type="button"
+              hidden={!nextPage}
+              data-next-page={nextPage ?? ''}
+              data-category={category}
+              data-language={language}
+              class="min-h-11 rounded-sm bg-ink px-6 text-sm font-semibold text-canvas shadow-stacked-sm transition-colors hover:bg-charcoal disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              Load more headlines
+            </button>
+            <p id="load-more-status" role="status" aria-live="polite" class="text-xs text-mute" />
+          </div>
+        </>
+      )
+    }
   </div>
 </section>
 
 <script>
+  // Imported from lib/, not re-implemented. Both of these previously existed
+  // as private copies in this file that had already drifted from the originals.
+  import { formatPublished } from '../lib/news/feed';
+  import { isSafeUrl, safeHref } from '../lib/url';
+
   const btn = document.getElementById('load-more') as HTMLButtonElement | null;
   const grid = document.getElementById('articles-grid');
   const status = document.getElementById('load-more-status');
+  const template = document.getElementById('article-card-template') as HTMLTemplateElement | null;
 
   interface FeedArticle {
     id: string;
@@ -121,124 +157,65 @@ const languageName = LANGUAGES.find((l) => l.code === language)?.name ?? languag
     publishedAt: string;
   }
 
-  function formatPublished(value: string): string {
-    const t = Date.parse(value);
-    if (Number.isNaN(t)) return '';
-    // floor, not round: matches src/lib/news/feed.ts's formatPublished, which
-    // never reports an elapsed time as MORE than it actually is.
-    const mins = Math.floor((Date.now() - t) / 60000);
-    if (mins < 1) return 'just now';
-    if (mins < 60) return `${mins}m ago`;
-    const hours = Math.floor(mins / 60);
-    if (hours < 24) return `${hours}h ago`;
-    return new Date(t).toLocaleDateString('en-IN', { month: 'short', day: 'numeric' });
-  }
+  /** Fills one clone of ArticleCard's own markup.
+   *
+   *  textContent for every string, and safeHref() for every URL. No innerHTML
+   *  anywhere: a headline is third-party text and an image URL is
+   *  provider-supplied, so both are treated as hostile.
+   */
+  function buildCard(a: FeedArticle): DocumentFragment | null {
+    if (!template) return null;
+    const frag = template.content.cloneNode(true) as DocumentFragment;
 
-  function isSafeUrl(value: string): boolean {
-    try {
-      const { protocol } = new URL(value);
-      return protocol === 'http:' || protocol === 'https:';
-    } catch {
-      return false;
-    }
-  }
+    const root = frag.querySelector<HTMLElement>('[data-article-card]');
+    if (!root) return null;
+    root.dataset.articleId = a.id;
 
-  // Built with createElement + textContent throughout. Never innerHTML: a
-  // headline is third-party text and would otherwise be an injection vector.
-  function buildCard(a: FeedArticle): HTMLElement {
-    const el = document.createElement('article');
-    el.dataset.articleId = a.id;
-    el.className =
-      'article-card bg-surface-elevated border border-hairline rounded-md overflow-hidden shadow-stacked-sm hover:shadow-stacked-md hover:border-primary transition-[box-shadow,border-color] flex flex-col group h-full';
+    const setField = (name: string, value: string) => {
+      for (const el of frag.querySelectorAll<HTMLElement>(`[data-field="${name}"]`)) {
+        el.textContent = value;
+      }
+    };
 
-    if (a.imageUrl && isSafeUrl(a.imageUrl)) {
-      const wrap = document.createElement('div');
-      wrap.className = 'relative h-44 w-full overflow-hidden bg-surface-card';
-      const img = document.createElement('img');
-      img.src = a.imageUrl;
-      img.alt = '';
-      img.width = 400;
-      img.height = 176;
-      img.loading = 'lazy';
-      img.className = 'w-full h-full object-cover group-hover:scale-105 transition-transform duration-300';
-      const badge = document.createElement('div');
-      badge.className =
-        'absolute top-3 left-3 bg-surface-elevated/90 backdrop-blur-md px-2.5 py-0.5 rounded-full text-[11px] font-semibold capitalize text-ink border border-hairline flex items-center gap-1.5 shadow-stacked-sm';
-      const dot = document.createElement('span');
-      dot.className = 'w-1.5 h-1.5 rounded-full bg-primary';
-      badge.appendChild(dot);
-      badge.appendChild(document.createTextNode(a.category));
-      wrap.appendChild(img);
-      wrap.appendChild(badge);
+    setField('title', a.title);
+    setField('title-sr', a.title);
+    setField('source', a.source);
+    setField('category', a.category);
+    setField('published', formatPublished(a.publishedAt));
+    setField('summary', a.summary ?? '');
 
-      const saveBtn = document.createElement('button');
-      saveBtn.type = 'button';
-      saveBtn.className =
-        'save-toggle-btn absolute top-3 right-3 px-2.5 py-0.5 rounded-full text-[11px] font-semibold border border-hairline bg-surface-elevated/90 backdrop-blur-md text-ink hover:border-primary transition-colors cursor-pointer';
-      saveBtn.dataset.saveHref = a.url;
-      saveBtn.dataset.saveHeadline = a.title;
-      const alreadySaved = window.NZ?.isSaved(a.url) ?? false;
-      saveBtn.setAttribute('aria-pressed', String(alreadySaved));
-      saveBtn.classList.toggle('is-saved', alreadySaved);
-      const saveLabel = document.createElement('span');
-      saveLabel.dataset.saveLabel = '';
-      saveLabel.textContent = alreadySaved ? 'Saved' : 'Save';
-      saveBtn.appendChild(saveLabel);
-      wrap.appendChild(saveBtn);
+    const summaryBox = frag.querySelector<HTMLElement>('[data-card-summary]');
+    if (summaryBox) summaryBox.hidden = !a.summary;
 
-      el.appendChild(wrap);
+    const media = frag.querySelector<HTMLElement>('[data-card-media]');
+    const image = frag.querySelector<HTMLImageElement>('[data-card-image]');
+    const imageSrc = a.imageUrl ? safeHref(a.imageUrl) : null;
+    if (media) media.hidden = imageSrc === null;
+    if (image && imageSrc) image.src = imageSrc;
+
+    const href = safeHref(a.url);
+    for (const link of frag.querySelectorAll<HTMLAnchorElement>('a[data-card-link]')) {
+      // The template ships without an href; only a validated one is ever set.
+      if (href) {
+        link.href = href;
+        link.target = '_blank';
+        link.rel = 'noopener noreferrer';
+      } else {
+        link.removeAttribute('href');
+      }
     }
 
-    const body = document.createElement('div');
-    body.className = 'p-4 flex-1 flex flex-col justify-between space-y-3';
-
-    const top = document.createElement('div');
-
-    const src = document.createElement('div');
-    src.className = 'text-[11px] font-mono text-mute mb-1.5';
-    src.textContent = a.source;
-
-    const h3 = document.createElement('h3');
-    h3.className =
-      'article-headline text-base font-semibold text-ink leading-snug tracking-[-0.3px] mb-2 group-hover:text-primary-strong transition-colors';
-    const link = document.createElement('a');
-    link.href = a.url;
-    link.target = '_blank';
-    link.rel = 'noopener noreferrer';
-    link.className =
-      'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-strong rounded-sm';
-    link.textContent = a.title;
-    h3.appendChild(link);
-
-    top.appendChild(src);
-    top.appendChild(h3);
-
-    if (a.summary) {
-      const p = document.createElement('p');
-      p.className = 'article-short-news text-xs text-body leading-relaxed line-clamp-3';
-      p.textContent = a.summary;
-      top.appendChild(p);
+    const saved = window.NZ?.isSaved(a.url) ?? false;
+    for (const save of frag.querySelectorAll<HTMLElement>('[data-card-save]')) {
+      save.setAttribute('data-save-href', a.url);
+      save.setAttribute('data-save-headline', a.title);
+      save.setAttribute('aria-pressed', String(saved));
+      save.classList.toggle('is-saved', saved);
+      const label = save.querySelector<HTMLElement>('[data-save-label]');
+      if (label) label.textContent = saved ? 'Saved' : 'Save';
     }
 
-    const foot = document.createElement('div');
-    foot.className = 'pt-3 border-t border-hairline flex items-center justify-between text-xs';
-    const when = document.createElement('span');
-    when.className = 'font-mono text-mute';
-    when.textContent = formatPublished(a.publishedAt);
-    const read = document.createElement('a');
-    read.href = a.url;
-    read.target = '_blank';
-    read.rel = 'noopener noreferrer';
-    read.className =
-      'px-3 py-1 bg-ink hover:bg-charcoal text-canvas text-xs font-semibold rounded-md shadow-stacked-sm transition-colors flex items-center gap-1.5';
-    read.textContent = 'Read at source';
-    foot.appendChild(when);
-    foot.appendChild(read);
-
-    body.appendChild(top);
-    body.appendChild(foot);
-    el.appendChild(body);
-    return el;
+    return frag;
   }
 
   btn?.addEventListener('click', async () => {
@@ -272,7 +249,10 @@ const languageName = LANGUAGES.find((l) => l.code === language)?.name ?? languag
       );
 
       // Appended, so keyboard focus order stays natural.
-      for (const a of fresh) grid.appendChild(buildCard(a));
+      for (const a of fresh) {
+        const card = buildCard(a);
+        if (card) grid.appendChild(card);
+      }
 
       if (page.nextPage) {
         btn.dataset.nextPage = page.nextPage;

@@ -3,47 +3,280 @@ import Layout from '../../layouts/Layout.astro';
 import Navbar from '../../components/Navbar.astro';
 import MastheadInfoStrip from '../../components/MastheadInfoStrip.astro';
 import Footer from '../../components/Footer.astro';
+import VerdictFilterChips from '../../components/factcheck/VerdictFilterChips.astro';
 
-// P5: "/fact-check/history — Your past checks — Local store". The
-// implementation plan explicitly forbids a server-side history database
-// here, so this is a page shell only. NO client-side history storage exists
-// anywhere in the codebase today — FactCheckWidget.astro does not write
-// completed checks to localStorage under any key — so this page cannot show
-// real history without EITHER inventing a new client storage schema (not
-// authorised: "do not invent a new storage schema unless one already
-// exists") OR modifying FactCheckWidget's check flow to start writing one
-// (a component behaviour change, out of P5's page-shell scope, and
-// explicitly forbidden: "Do not turn P5 into a component redesign").
-//
-// So: an honest, permanent-feeling empty state, not a fabricated list. Wiring
-// FactCheckWidget to actually populate this is flagged as a known limitation
-// in the P5 report, for a future phase to pick up deliberately.
+/** /fact-check/history — Phase 6 HISTORY decision.
+ *
+ *  DEVICE-LOCAL ONLY. Reads localStorage in the client script below; nothing
+ *  here queries D1 or any server endpoint, and there is no history table.
+ *  P5 shipped this route as a deliberate empty shell (see the client script's
+ *  comment for why) pending exactly this decision.
+ */
 export const prerender = true;
 ---
 
-<Layout title="Your Fact-Check History | NewzWale" description="Claims you've checked, stored on this device.">
+<Layout
+  title="Your Fact-Check History | NewzWale"
+  description="Claims you've checked, stored on this device."
+>
   <Navbar />
   <MastheadInfoStrip />
 
-  <main id="main" class="flex-1 py-8 bg-surface-soft">
-    <div class="max-w-3xl mx-auto px-4 sm:px-6">
+  <main id="main" class="flex-1 bg-surface-soft py-8">
+    <div class="mx-auto max-w-3xl px-4 sm:px-6">
       <nav aria-label="Breadcrumb" class="mb-4">
-        <ol class="flex items-center gap-2 text-xs text-mute font-mono-caption">
+        <ol class="font-mono-caption flex items-center gap-2 text-mute">
           <li><a href="/" class="hover:text-primary-strong">Home</a></li>
           <li aria-hidden="true">/</li>
           <li><a href="/fact-check" class="hover:text-primary-strong">Fact Check</a></li>
           <li aria-hidden="true">/</li>
-          <li class="text-ink font-semibold">History</li>
+          <li class="font-semibold text-ink">History</li>
         </ol>
       </nav>
-      <h1 class="text-3xl sm:text-4xl font-semibold text-ink tracking-tight mb-2">Your Fact-Check History</h1>
-      <p class="text-sm text-mute mb-6">Stored on this device only.</p>
 
-      <p class="text-sm opacity-70 text-body">
-        Checks you run will appear here. <a href="/fact-check" class="text-primary-strong font-semibold hover:underline">Check a claim →</a>
+      <h1 class="mb-1 text-3xl font-semibold tracking-tight text-ink sm:text-4xl">
+        Your fact-check history
+      </h1>
+      <p class="font-mono-caption mb-6 text-mute">
+        Stored on this device only · not synced to an account or server
+      </p>
+
+      <VerdictFilterChips label="Filter history by verdict" class="mb-6" />
+
+      <div id="history-loading" class="flex flex-col gap-3">
+        <div class="h-20 animate-pulse rounded-sm border border-hairline bg-surface-elevated"></div>
+        <div class="h-20 animate-pulse rounded-sm border border-hairline bg-surface-elevated"></div>
+        <div class="h-20 animate-pulse rounded-sm border border-hairline bg-surface-elevated"></div>
+      </div>
+
+      <div
+        id="history-empty"
+        hidden
+        class="flex flex-col items-center rounded-md border border-dashed border-stone bg-surface-soft px-5 py-10 text-center"
+      >
+        <h2 class="text-base font-semibold text-ink">Nothing yet</h2>
+        <p class="mt-2 max-w-prose text-sm leading-relaxed text-body">
+          A claim you check successfully is saved here automatically, on this device only. Nothing
+          is sent to a server and nothing syncs between devices.
+        </p>
+        <a
+          href="/fact-check"
+          class="btn-pill-primary mt-5 inline-flex min-h-11 items-center px-5 text-sm"
+        >
+          Check a claim
+        </a>
+      </div>
+
+      <div
+        id="history-filtered-empty"
+        hidden
+        class="rounded-md border border-dashed border-stone bg-surface-soft px-5 py-8 text-center text-sm text-body"
+      >
+        No checks with this verdict yet.
+      </div>
+
+      <ul id="history-list" hidden class="flex flex-col divide-y divide-hairline-soft"></ul>
+
+      <p
+        id="history-error"
+        role="alert"
+        hidden
+        class="rounded-md border border-stone bg-surface-soft px-5 py-6 text-center text-sm text-body"
+      >
+        History could not be read from this device's storage. It may be disabled in your browser.
       </p>
     </div>
   </main>
 
   <Footer />
 </Layout>
+
+<!-- Row template, so the reader's own claim text is written with textContent
+     — the same no-innerHTML rule that governs evidence rendering applies here,
+     because a history claim is exactly as untrusted: it is whatever the
+     reader (or a page they pasted) supplied at check time. -->
+<template id="history-row-template">
+  <li class="py-4">
+    <a href="#" data-row-link class="flex flex-col gap-2 rounded-sm focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-strong">
+      <span data-row-claim class="text-[15px] font-medium leading-snug text-ink"></span>
+      <span class="flex flex-wrap items-center gap-2">
+        <span data-row-verdict></span>
+        <span data-row-strength class="font-mono-caption text-mute"></span>
+        <span data-row-time class="font-mono-caption text-mute"></span>
+      </span>
+    </a>
+    <button
+      type="button"
+      data-row-remove
+      class="mt-1 min-h-11 cursor-pointer border-none bg-transparent px-0 text-xs font-medium text-mute hover:text-error"
+    >
+      Remove from history
+    </button>
+  </li>
+</template>
+
+<script>
+  import {
+    getFactCheckHistory,
+    filterByVerdict,
+    countsByVerdict,
+    removeFactCheckHistoryEntry,
+    type FactCheckHistoryEntry,
+  } from '../../lib/history/factcheck-history';
+
+  const VERDICT_ORDER = ['true', 'false', 'partly_true', 'misleading', 'needs_context', 'unverified'];
+
+  const loading = document.getElementById('history-loading');
+  const emptyState = document.getElementById('history-empty');
+  const filteredEmpty = document.getElementById('history-filtered-empty');
+  const list = document.getElementById('history-list');
+  const errorBox = document.getElementById('history-error');
+  const filterGroup = document.querySelector('[data-verdict-filters]');
+  const rowTemplate = document.getElementById('history-row-template') as HTMLTemplateElement | null;
+
+  let activeFilter = 'all';
+  let all: FactCheckHistoryEntry[] = [];
+  let readFailed = false;
+
+  function formatRelative(iso: string): string {
+    const t = Date.parse(iso);
+    if (Number.isNaN(t)) return '';
+    const mins = Math.floor((Date.now() - t) / 60000);
+    if (mins < 1) return 'just now';
+    if (mins < 60) return `${mins}m ago`;
+    const hours = Math.floor(mins / 60);
+    if (hours < 24) return `${hours}h ago`;
+    const days = Math.floor(hours / 24);
+    if (days < 30) return `${days}d ago`;
+    return new Date(t).toLocaleDateString('en-IN', { month: 'short', day: 'numeric', year: 'numeric' });
+  }
+
+  function renderRow(entry: FactCheckHistoryEntry): HTMLElement | null {
+    if (!rowTemplate) return null;
+    const frag = rowTemplate.content.cloneNode(true) as DocumentFragment;
+    const li = frag.querySelector('li');
+    if (!li) return null;
+
+    const link = frag.querySelector<HTMLAnchorElement>('[data-row-link]');
+    if (link) link.href = `/fact-check/${encodeURIComponent(entry.id)}`;
+
+    const claim = frag.querySelector('[data-row-claim]');
+    if (claim) claim.textContent = entry.claim;
+
+    const time = frag.querySelector('[data-row-time]');
+    if (time) time.textContent = formatRelative(entry.checkedAt);
+
+    const strength = frag.querySelector('[data-row-strength]');
+    if (strength && entry.evidenceStrength) {
+      strength.textContent = `· ${entry.evidenceStrength[0]!.toUpperCase()}${entry.evidenceStrength.slice(1)} evidence`;
+    }
+
+    const verdictSlot = frag.querySelector('[data-row-verdict]');
+    if (verdictSlot) {
+      // FactCheckChip's own client-free markup: built the same way the
+      // .astro component renders, by hand here, since this loop runs after
+      // hydration with data the server never saw.
+      const p = VERDICT_PRESENTATION[entry.verdict] ?? VERDICT_PRESENTATION.unverified;
+      const chip = document.createElement('span');
+      chip.className = `inline-flex items-center gap-1.5 rounded-full bg-surface-card px-2.5 py-1 text-[11px] font-semibold text-ink ${p.borderClass}`;
+      const glyph = document.createElement('span');
+      glyph.setAttribute('aria-hidden', 'true');
+      glyph.className = `inline-flex h-4 w-4 items-center justify-center rounded-full text-[10px] leading-none ${p.glyphClass}`;
+      glyph.textContent = p.icon;
+      const label = document.createElement('span');
+      label.textContent = p.label;
+      chip.appendChild(glyph);
+      chip.appendChild(label);
+      verdictSlot.replaceWith(chip);
+    }
+
+    const removeBtn = frag.querySelector<HTMLButtonElement>('[data-row-remove]');
+    removeBtn?.addEventListener('click', () => {
+      removeFactCheckHistoryEntry(entry.id);
+      all = all.filter((e) => e.id !== entry.id);
+      render();
+    });
+
+    return li;
+  }
+
+  // Mirrors src/lib/ui/verdict.ts — see FactCheckWidget.astro's identical
+  // note on why this table is duplicated rather than imported: the source
+  // module is intended for Astro's server-side render step.
+  const VERDICT_PRESENTATION: Record<string, { label: string; icon: string; borderClass: string; glyphClass: string }> = {
+    true: { label: 'TRUE', icon: '✓', borderClass: 'border border-success', glyphClass: 'bg-success text-canvas' },
+    false: { label: 'FALSE', icon: '✕', borderClass: 'border border-error', glyphClass: 'bg-error text-canvas' },
+    partly_true: { label: 'PARTLY TRUE', icon: '◐', borderClass: 'border border-warning', glyphClass: 'bg-warning text-canvas' },
+    misleading: { label: 'MISLEADING', icon: '⚠', borderClass: 'border-2 border-verdict-misleading', glyphClass: 'text-verdict-misleading' },
+    unverified: { label: 'UNVERIFIED', icon: '?', borderClass: 'border-2 border-mute', glyphClass: 'text-mute' },
+    needs_context: { label: 'NEEDS CONTEXT', icon: 'ⓘ', borderClass: 'border-2 border-verdict-context', glyphClass: 'text-verdict-context' },
+  };
+
+  function render() {
+    if (loading) loading.hidden = true;
+
+    if (readFailed) {
+      if (errorBox) errorBox.hidden = false;
+      if (emptyState) emptyState.hidden = true;
+      if (list) list.hidden = true;
+      if (filteredEmpty) filteredEmpty.hidden = true;
+      return;
+    }
+
+    const counts = countsByVerdict(all, VERDICT_ORDER);
+    for (const [verdict, count] of Object.entries(counts)) {
+      const el = document.querySelector(`[data-verdict-count="${verdict}"]`);
+      if (el) el.textContent = String(count);
+      if (verdict !== 'all') {
+        const btn = document.querySelector<HTMLButtonElement>(`[data-verdict-filter="${verdict}"]`);
+        if (btn) btn.disabled = count === 0 && activeFilter !== verdict;
+      }
+    }
+
+    if (all.length === 0) {
+      if (emptyState) emptyState.hidden = false;
+      if (list) list.hidden = true;
+      if (filteredEmpty) filteredEmpty.hidden = true;
+      return;
+    }
+    if (emptyState) emptyState.hidden = true;
+
+    const filtered = filterByVerdict(all, activeFilter);
+
+    if (filtered.length === 0) {
+      if (filteredEmpty) filteredEmpty.hidden = false;
+      if (list) list.hidden = true;
+      return;
+    }
+    if (filteredEmpty) filteredEmpty.hidden = true;
+
+    if (list) {
+      list.hidden = false;
+      list.replaceChildren();
+      for (const entry of filtered) {
+        const row = renderRow(entry);
+        if (row) list.appendChild(row);
+      }
+    }
+  }
+
+  filterGroup?.addEventListener('click', (event) => {
+    const target = event.target;
+    if (!(target instanceof HTMLElement)) return;
+    const btn = target.closest<HTMLButtonElement>('[data-verdict-filter]');
+    if (!btn || btn.disabled) return;
+
+    activeFilter = btn.dataset.verdictFilter ?? 'all';
+    for (const b of filterGroup.querySelectorAll<HTMLButtonElement>('[data-verdict-filter]')) {
+      b.setAttribute('aria-pressed', String(b === btn));
+    }
+    render();
+  });
+
+  try {
+    all = getFactCheckHistory();
+  } catch {
+    readFailed = true;
+  }
+  render();
+</script>

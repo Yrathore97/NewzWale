@@ -1,0 +1,50 @@
+---
+import { verdictPresentation } from '../../lib/ui/verdict';
+
+/** Compact verdict marker for a card or a story header.
+ *
+ *  Icon + label + colour, never colour alone, and never rendered at all when
+ *  there is no completed check — an empty chip would imply we had looked.
+ */
+interface Props {
+  verdict?: string | null;
+  /** Links to the full result. Omitted for a non-interactive marker. */
+  href?: string | null;
+  class?: string;
+}
+
+const { verdict, href, class: extraClass = '' } = Astro.props;
+
+const p = verdict ? verdictPresentation(verdict) : null;
+const Tag = p && href ? 'a' : 'span';
+---
+
+{
+  p && (
+    <Tag
+      href={href ?? undefined}
+      class:list={[
+        'inline-flex items-center gap-1.5 rounded-full bg-surface-card px-2.5 py-1 text-[11px] font-semibold text-ink',
+        // The label is ink on a neutral surface for EVERY verdict. The verdict
+        // colour carries the border and the glyph only: amber cannot hold
+        // small text at AA and the token layer is frozen. Asserted in
+        // tests/contrast.test.ts.
+        p.borderClass,
+        href && 'min-h-11 hover:bg-secondary-bg',
+        extraClass,
+      ]}
+    >
+      <span
+        aria-hidden="true"
+        class:list={[
+          'inline-flex h-4 w-4 items-center justify-center rounded-full text-[10px] leading-none',
+          p.glyphClass,
+        ]}
+      >
+        {p.icon}
+      </span>
+      <span>{p.label}</span>
+      <span class="sr-only">— {p.description}</span>
+    </Tag>
+  )
+}

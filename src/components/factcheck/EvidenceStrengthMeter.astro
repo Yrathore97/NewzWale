@@ -1,0 +1,61 @@
+---
+import { strengthPresentation, STRENGTH_SEGMENTS } from '../../lib/ui/verdict';
+
+/** Four discrete segments and a word. Never a percentage.
+ *
+ *  A number would imply a precision the pipeline does not have
+ *  (NEWZWALE_DESIGN_DIRECTION §6.4). Evidence strength is INDEPENDENT of the
+ *  verdict and sits beside it at equal weight, so a TRUE on weak evidence
+ *  cannot look like a TRUE on strong evidence (UI/UX spec §5.4).
+ */
+interface Props {
+  strength?: string | null;
+  asTemplate?: boolean;
+  templateId?: string;
+  class?: string;
+}
+
+const {
+  strength,
+  asTemplate = false,
+  templateId = 'evidence-strength-template',
+  class: extraClass = '',
+} = Astro.props;
+
+const s = strengthPresentation(asTemplate ? 'none' : strength);
+const segments = Array.from({ length: STRENGTH_SEGMENTS }, (_, i) => i < s.filled);
+
+const Wrapper = asTemplate ? 'template' : Fragment;
+const wrapperProps = asTemplate ? { id: templateId } : {};
+---
+
+<Wrapper {...wrapperProps}>
+  <div
+    data-strength-meter
+    data-strength={asTemplate ? undefined : s.strength}
+    class:list={['flex items-center gap-2.5', extraClass]}
+  >
+    <span class="font-mono-caption text-mute">Evidence</span>
+
+    <span class="flex items-center gap-1" aria-hidden="true">
+      {
+        segments.map((filled) => (
+          <span
+            data-strength-segment
+            data-filled={filled ? 'true' : 'false'}
+            class:list={[
+              'h-2.5 w-5 rounded-[2px] border',
+              filled ? 'border-ink bg-ink' : 'border-stone bg-transparent',
+            ]}
+          />
+        ))
+      }
+    </span>
+
+    {/* The word is the real signal; the segments are its illustration. */}
+    <span data-strength-label class="text-sm font-semibold text-ink">{s.label}</span>
+    <span class="sr-only" data-strength-description>
+      Evidence strength: {s.label}. {s.description}
+    </span>
+  </div>
+</Wrapper>

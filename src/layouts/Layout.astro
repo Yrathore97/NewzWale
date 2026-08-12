@@ -1,10 +1,17 @@
 ---
 import '../styles/global.css';
+import { DEFAULT_LANGUAGE, languageDir } from '../lib/news/languages';
+import BottomNav from '../components/shell/BottomNav.astro';
 
 interface Props {
   title?: string;
   description?: string;
   image?: string;
+  /** Content language of this page. Drives <html lang> and <html dir>, so a
+   *  Hindi or Urdu feed is announced correctly instead of being read with
+   *  English phonetics (audit A-01). Pages with no language-specific content
+   *  leave this at the default. */
+  lang?: string;
 }
 
 const SITE = 'https://www.newzwale.com';
@@ -12,14 +19,17 @@ const SITE = 'https://www.newzwale.com';
 const {
   title = 'NewzWale | Only Facts News',
   description = 'Live Indian news headlines, plus a fact-check tool that checks claims against published fact-checkers and real sources before returning a verdict.',
-  image = `${SITE}/web-app-manifest-512x512.png`
+  image = `${SITE}/web-app-manifest-512x512.png`,
+  lang = DEFAULT_LANGUAGE
 } = Astro.props;
+
+const dir = languageDir(lang);
 
 const canonicalURL = new URL(Astro.url.pathname, Astro.site || SITE);
 ---
 
 <!doctype html>
-<html lang="en" class="scroll-smooth">
+<html lang={lang} dir={dir} class="scroll-smooth">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -115,7 +125,12 @@ const canonicalURL = new URL(Astro.url.pathname, Astro.site || SITE);
       }
     ])} />
   </head>
-  <body class="bg-surface-soft text-ink min-h-screen flex flex-col antialiased transition-colors duration-200">
+  <!-- The bottom padding clears the fixed BottomNav (56px + the iOS home
+       indicator) so the last card of a feed is never trapped underneath it. It
+       is dropped from lg up, where the bar is not rendered. -->
+  <body
+    class="bg-surface-soft text-ink min-h-screen flex flex-col antialiased transition-colors duration-200 pb-[calc(3.5rem+env(safe-area-inset-bottom,0px))] lg:pb-0"
+  >
     <a
       href="#main"
       class="sr-only focus:not-sr-only focus:fixed focus:top-3 focus:left-3 focus:z-[100] focus:px-4 focus:py-2 focus:bg-ink focus:text-canvas focus:rounded-md focus:shadow-stacked-md"
@@ -257,14 +272,9 @@ const canonicalURL = new URL(Astro.url.pathname, Astro.site || SITE);
 
     <slot />
 
-    <a
-      href="/fact-check"
-      class="hidden sm:flex fixed bottom-5 right-5 z-[80] px-5 py-3.5 bg-primary-strong hover:bg-primary-pressed text-on-primary text-sm font-semibold rounded-full shadow-stacked-lg transition-colors items-center gap-1.5 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ink"
-    >
-      Verify a claim →
-    </a>
+    <BottomNav />
 
-    
+
 
     <script>
       // Full-page navigations (category links, pagination, language switch)

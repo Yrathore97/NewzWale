@@ -1,0 +1,64 @@
+---
+/** "We'll check this claim:" — the most important addition in the flow.
+ *
+ *  Before this step, submitting a URL silently sent up to 4,000 characters of
+ *  article body as "the claim", and the reader never saw what the system
+ *  thought it was checking. Showing the extracted claim back converts an
+ *  unanswerable question into an answerable one and makes our interpretation
+ *  auditable by the person who asked (NEWZWALE_UI_UX_SPEC §5.2).
+ *
+ *  Shown when the input is a URL or a long paragraph. A short typed claim is
+ *  already its own confirmation, so it goes straight through.
+ */
+---
+
+<div id="claim-confirm-step" hidden class="flex flex-col gap-3">
+  <h2 class="text-lg font-semibold text-ink">We'll check this claim</h2>
+
+  <p class="text-sm text-body">
+    This is what we extracted from what you pasted. Correct it if it is not the claim you meant.
+  </p>
+
+  <blockquote
+    class="rounded-sm border border-hairline bg-surface-elevated px-4 py-3 text-base leading-relaxed text-ink"
+  >
+    <span id="claim-confirm-text"></span>
+  </blockquote>
+
+  <p id="claim-confirm-origin" hidden class="font-mono-caption text-mute">
+    Extracted from <span id="claim-confirm-origin-host"></span>
+  </p>
+
+  <label for="claim-confirm-edit" class="sr-only">Edit the claim before checking</label>
+  <textarea
+    id="claim-confirm-edit"
+    hidden
+    rows="3"
+    maxlength="2000"
+    class="w-full resize-y rounded-sm border border-hairline bg-surface-elevated px-4 py-3 text-base leading-relaxed text-ink focus:outline-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-strong"
+  ></textarea>
+
+  <div class="flex flex-wrap items-center gap-2">
+    <button
+      type="button"
+      id="claim-confirm-go"
+      class="btn-pill-primary inline-flex min-h-11 cursor-pointer items-center px-5 text-sm"
+    >
+      Check this
+    </button>
+    <button
+      type="button"
+      id="claim-confirm-edit-btn"
+      class="btn-pill-secondary inline-flex min-h-11 cursor-pointer items-center px-5 text-sm"
+    >
+      Edit
+    </button>
+    <button
+      type="button"
+      id="claim-confirm-back"
+      class="inline-flex min-h-11 cursor-pointer items-center px-2 text-sm font-semibold text-primary-strong"
+    >
+      Start over
+    </button>
+  </div>
+</div>

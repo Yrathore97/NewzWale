@@ -3,6 +3,9 @@ import Layout from '../../layouts/Layout.astro';
 import Navbar from '../../components/Navbar.astro';
 import MastheadInfoStrip from '../../components/MastheadInfoStrip.astro';
 import ArticleCard from '../../components/ArticleCard.astro';
+import ArticleGrid from '../../components/news/ArticleGrid.astro';
+import EmptyState from '../../components/shared/EmptyState.astro';
+import ErrorState from '../../components/shared/ErrorState.astro';
 import Footer from '../../components/Footer.astro';
 import { CATEGORIES, isValidCategory, DEFAULT_CATEGORY } from '../../lib/news/categories';
 import { isValidLanguage, DEFAULT_LANGUAGE } from '../../lib/news/languages';
@@ -49,6 +52,7 @@ try {
 <Layout
   title="Latest News | NewzWale"
   description="The full NewzWale headline feed, filterable by category and language."
+  lang={language}
 >
   <Navbar />
   <MastheadInfoStrip />
@@ -84,30 +88,40 @@ try {
     </div>
 
     <div class="max-w-[1400px] mx-auto px-4 sm:px-6">
-      {dbUnavailable ? (
-        <p class="text-sm text-body bg-surface-elevated border border-hairline rounded-md p-4">
-          The news database is not available right now. Please check back shortly.
-        </p>
-      ) : articles.length === 0 ? (
-        <p class="text-sm opacity-70 text-body">No articles found for this filter yet.</p>
-      ) : (
-        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-          {articles.map((a) => (
-            <ArticleCard
-              article={{
-                id: a.id,
-                title: a.title,
-                url: a.url,
-                summary: a.summary ?? '',
-                imageUrl: a.imageUrl,
-                source: a.source,
-                category: a.category,
-                publishedAt: a.publishedAt ?? '',
-              }}
-            />
-          ))}
-        </div>
-      )}
+      {
+        dbUnavailable ? (
+          <ErrorState
+            title="Couldn't load headlines"
+            description="The news database did not respond."
+            retryLabel="Reload"
+            retryHref={`/news?category=${category}&language=${language}`}
+          />
+        ) : articles.length === 0 ? (
+          <EmptyState
+            title={`No headlines in ${category === DEFAULT_CATEGORY ? 'this feed' : category} right now`}
+            description="Other categories are still updating."
+            actionLabel="Browse all categories"
+            actionHref="/news"
+          />
+        ) : (
+          <ArticleGrid>
+            {articles.map((a) => (
+              <ArticleCard
+                article={{
+                  id: a.id,
+                  title: a.title,
+                  url: a.url,
+                  summary: a.summary ?? '',
+                  imageUrl: a.imageUrl,
+                  source: a.source,
+                  category: a.category,
+                  publishedAt: a.publishedAt ?? '',
+                }}
+              />
+            ))}
+          </ArticleGrid>
+        )
+      }
       {cursor && (
         <p class="mt-8 text-center text-xs text-mute">
           <a

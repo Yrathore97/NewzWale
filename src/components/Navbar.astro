@@ -1,210 +1,293 @@
 ---
 import LogoIcon from './LogoIcon.astro';
+import Dialog from './shared/Dialog.astro';
 import { CATEGORIES, RAIL_TOPICS } from '../lib/news/categories';
 
+/** Site header.
+ *
+ *  Mobile: a single 56px bar. Chrome used to be three stacked bars (~138px,
+ *  21% of a 667px viewport — audit §5); it is now 56px of header plus a 44px
+ *  category strip that hides on scroll-down, and 56px of BottomNav.
+ *
+ *  Desktop (lg+): one 64px header carrying the SAME five destinations as
+ *  BottomNav, so the two experiences do not diverge conceptually
+ *  (NEWZWALE_DESIGN_DIRECTION §7).
+ *
+ *  Every overlay here is a shared <Dialog>: focus trap, focus restoration,
+ *  Escape and scroll lock come from one implementation rather than three
+ *  partial ones (audit A-03, A-04).
+ */
 const currentPath = Astro.url.pathname;
-const isNewsActive = currentPath === '/' || currentPath === '';
-// /fact-check, not /verify: D8 (permanent 301, /verify no longer serves the page).
-const isVerifyActive = currentPath.startsWith('/fact-check');
 
-const activeCategory = currentPath.startsWith('/category/')
-  ? currentPath.split('/')[2]
-  : null;
+function isCurrent(href: string, exact = false): boolean {
+  if (exact) return currentPath === href || currentPath === '';
+  return currentPath === href || currentPath.startsWith(`${href}/`);
+}
+
+const DESTINATIONS = [
+  { href: '/', label: 'Home', exact: true },
+  { href: '/trending', label: 'Trending', exact: false },
+  { href: '/fact-check', label: 'Fact Check', exact: false },
+  { href: '/search', label: 'Search', exact: false },
+  { href: '/saved', label: 'You', exact: false },
+];
+
+const activeCategory = currentPath.startsWith('/category/') ? currentPath.split('/')[2] : null;
+
+const linkBase =
+  'px-3 py-1.5 text-xs font-medium rounded-full transition-colors duration-200 inline-flex items-center min-h-9';
+const linkActive = 'bg-primary-strong text-on-primary shadow-stacked-sm font-semibold';
+const linkIdle = 'text-body hover:text-ink hover:bg-gradient-start';
 ---
 
-<header id="site-header" class="sticky top-0 z-50 w-full bg-canvas/95 backdrop-blur-md border-b border-hairline transition-[transform,colors] duration-300 ease-out">
-  <div class="max-w-[1400px] mx-auto h-[64px] px-3 sm:px-6 flex items-center justify-between">
-
-    <!-- Brand Logo & Live Indicator -->
-    <div class="flex items-center gap-2 sm:gap-3 shrink-0">
-      <a href="/" class="flex items-center gap-2 group">
-        <div class="relative flex items-center justify-center group-hover:scale-105 transition-transform">
-          <LogoIcon className="w-7 h-7 sm:w-8 sm:h-8" />
-          <span class="absolute -top-0.5 -right-0.5 w-2 h-2 sm:w-2.5 sm:h-2.5 bg-primary rounded-full animate-ping"></span>
-          <span class="absolute -top-0.5 -right-0.5 w-2 h-2 sm:w-2.5 sm:h-2.5 bg-primary rounded-full"></span>
-        </div>
-        <div class="flex flex-col">
-          <span class="font-semibold text-sm sm:text-base tracking-tight leading-tight text-ink">NewzWale</span>
-          <span class="font-mono-caption text-[9px] sm:text-[10px] text-primary-strong font-semibold tracking-widest leading-none">Only Facts News</span>
-        </div>
-      </a>
-    </div>
-
-    <!-- Desktop Navigation Links -->
-    <nav class="hidden lg:flex items-center gap-2" aria-label="Main Navigation">
-      <a
-        href="/"
-        aria-current={isNewsActive ? "page" : undefined}
-        class={`px-3 py-1.5 text-xs font-medium rounded-full transition-colors duration-200 ${
-          isNewsActive
-            ? 'bg-primary-strong text-on-primary shadow-stacked-sm font-semibold'
-            : 'text-body hover:text-ink hover:bg-gradient-start'
-        }`}
-      >
-        News
-      </a>
-
-      <a
-        href="/fact-check"
-        aria-current={isVerifyActive ? "page" : undefined}
-        class={`px-3 py-1.5 text-xs font-medium rounded-full transition-colors duration-200 ${
-          isVerifyActive
-            ? 'bg-primary-strong text-on-primary shadow-stacked-sm font-semibold'
-            : 'text-body hover:text-ink hover:bg-gradient-start'
-        }`}
-      >
-        Fact Check
-      </a>
-
-      <!-- Customize Topics popover -->
-      <div class="relative">
-        <button
-          type="button"
-          id="topics-toggle"
-          aria-haspopup="true"
-          aria-expanded="false"
-          aria-controls="topics-panel"
-          class="px-3 py-1.5 bg-secondary-bg hover:bg-secondary-pressed text-ink text-xs font-medium rounded-full transition-colors duration-200 cursor-pointer"
+<header
+  id="site-header"
+  class="sticky top-0 z-50 w-full border-b border-hairline bg-canvas/95 backdrop-blur-md"
+>
+  <div
+    class="mx-auto flex h-14 max-w-[1400px] items-center justify-between gap-2 px-3 sm:px-6 lg:h-16"
+  >
+    <!-- Brand -->
+    <a href="/" class="group flex shrink-0 items-center gap-2">
+      <span class="relative flex items-center justify-center">
+        <LogoIcon className="w-7 h-7 sm:w-8 sm:h-8" />
+        <span class="absolute -right-0.5 -top-0.5 h-2 w-2 rounded-full bg-primary"></span>
+      </span>
+      <span class="flex flex-col">
+        <span class="text-sm font-semibold leading-tight tracking-tight text-ink sm:text-base"
+          >NewzWale</span
         >
-          Customize topics
-        </button>
-        <div
-          id="topics-panel"
-          role="menu"
-          aria-label="Homepage topics to show"
-          hidden
-          class="absolute right-0 top-[calc(100%+8px)] min-w-[200px] bg-surface-elevated border border-hairline rounded-md p-3.5 shadow-stacked-lg z-10"
+        <span
+          class="font-mono-caption text-[9px] font-semibold leading-none tracking-widest text-primary-strong sm:text-[10px]"
+          >Only Facts News</span
         >
-          <p class="text-xs font-semibold text-ink mb-2">Show sections for:</p>
-          {RAIL_TOPICS.map((topic) => (
-            <label class="flex items-center gap-2 py-1.5 text-sm text-body cursor-pointer">
-              <input type="checkbox" data-topic-toggle={topic.label} class="accent-primary-strong" />
-              {topic.label}
-            </label>
-          ))}
-        </div>
-      </div>
+      </span>
+    </a>
 
-      <a
-        href="/fact-check"
-        class="px-4 py-1.5 bg-primary-strong hover:bg-primary-pressed text-on-primary text-xs font-semibold rounded-full shadow-stacked-sm transition-colors"
+    <!-- Desktop navigation: the same five destinations as BottomNav -->
+    <nav class="hidden items-center gap-1 lg:flex" aria-label="Main">
+      {
+        DESTINATIONS.map((d) => (
+          <a
+            href={d.href}
+            aria-current={isCurrent(d.href, d.exact) ? 'page' : undefined}
+            class:list={[linkBase, isCurrent(d.href, d.exact) ? linkActive : linkIdle]}
+          >
+            {d.label}
+          </a>
+        ))
+      }
+
+      <button
+        type="button"
+        data-nz-dialog-toggle="topics-dialog"
+        aria-haspopup="dialog"
+        aria-expanded="false"
+        aria-controls="topics-dialog"
+        class="ml-1 inline-flex min-h-9 cursor-pointer items-center rounded-full bg-secondary-bg px-3 py-1.5 text-xs font-medium text-ink transition-colors duration-200 hover:bg-secondary-pressed"
       >
-        Verify a Claim
-      </a>
+        Customize topics
+      </button>
+
+      <button
+        type="button"
+        class="theme-toggle-trigger ml-1 inline-flex min-h-9 cursor-pointer items-center rounded-full px-3 py-1.5 text-xs font-medium text-body hover:bg-gradient-start hover:text-ink"
+      >
+        <span class="block dark:hidden">Dark mode</span>
+        <span class="hidden dark:block">Light mode</span>
+      </button>
     </nav>
 
-    <!-- Mobile Hamburger Button -->
-    <button
-      id="mobile-menu-btn"
-      type="button"
-      aria-label="Toggle Navigation Menu"
-      aria-expanded="false"
-      aria-controls="mobile-menu-drawer"
-      class="lg:hidden p-1.5 text-ink hover:bg-surface-card rounded-md transition-colors cursor-pointer"
-    >
-      <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"></path></svg>
-    </button>
+    <!-- Mobile: search shortcut + menu. 44x44 targets. -->
+    <div class="flex items-center gap-1 lg:hidden">
+      <a
+        href="/search"
+        aria-label="Search news and fact checks"
+        class="inline-flex h-11 w-11 items-center justify-center rounded-md text-ink hover:bg-surface-card"
+      >
+        <svg
+          class="h-5 w-5"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          aria-hidden="true"
+        >
+          <circle cx="11" cy="11" r="7"></circle>
+          <path stroke-linecap="round" d="m20 20-3.5-3.5"></path>
+        </svg>
+      </a>
+
+      <button
+        type="button"
+        class="theme-toggle-trigger inline-flex h-11 w-11 cursor-pointer items-center justify-center rounded-md text-ink hover:bg-surface-card"
+        aria-label="Toggle dark mode"
+      >
+        <svg
+          class="h-5 w-5"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          aria-hidden="true"
+        >
+          <path stroke-linecap="round" stroke-linejoin="round" d="M21 13.2A8.5 8.5 0 1 1 10.8 3a7 7 0 0 0 10.2 10.2z"></path>
+        </svg>
+      </button>
+
+      <button
+        type="button"
+        data-nz-dialog-toggle="mobile-menu"
+        aria-label="Open navigation menu"
+        aria-expanded="false"
+        aria-controls="mobile-menu"
+        class="inline-flex h-11 w-11 cursor-pointer items-center justify-center rounded-md text-ink hover:bg-surface-card"
+      >
+        <svg
+          class="h-6 w-6"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          aria-hidden="true"
+        >
+          <path stroke-linecap="round" stroke-linejoin="round" d="M4 6h16M4 12h16M4 18h16"></path>
+        </svg>
+      </button>
+    </div>
   </div>
 
-  <!-- Category strip: horizontally scrollable on narrow screens. The right-edge
-       fade hints there's more to scroll to; it hides itself once you've
-       scrolled to the end. -->
-  <div class="relative w-full border-t border-hairline-soft bg-surface-soft">
+  <!-- Category strip. Hides on scroll-down so 56px of chrome remains while
+       reading; the header itself stays put, which keeps the landmark reachable
+       for magnifier and screen-reader users (audit A-08). -->
+  <div
+    id="category-strip-wrap"
+    class="relative w-full border-t border-hairline-soft bg-surface-soft transition-[max-height,opacity] duration-300 ease-out"
+  >
     <nav
       id="category-strip"
       aria-label="News categories"
-      class="max-w-[1400px] mx-auto px-3 sm:px-6 flex items-center gap-2 overflow-x-auto no-scrollbar h-[46px]"
+      class="no-scrollbar mx-auto flex h-11 max-w-[1400px] items-center gap-2 overflow-x-auto px-3 sm:px-6"
     >
-      {CATEGORIES.map((c) => (
-        <a
-          href={`/category/${c.slug}`}
-          aria-current={activeCategory === c.slug ? 'page' : undefined}
-          class={`shrink-0 px-3.5 py-1.5 text-xs font-medium rounded-full transition-colors duration-200 ${
-            activeCategory === c.slug
-              ? 'bg-primary-strong text-on-primary font-semibold shadow-stacked-sm'
-              : 'bg-secondary-bg text-ink-soft hover:bg-secondary-pressed'
-          }`}
-        >
-          {c.label}
-        </a>
-      ))}
+      {
+        CATEGORIES.map((c) => (
+          <a
+            href={`/category/${c.slug}`}
+            aria-current={activeCategory === c.slug ? 'page' : undefined}
+            class:list={[
+              'inline-flex shrink-0 items-center rounded-full px-3.5 py-1.5 text-xs font-medium transition-colors duration-200',
+              activeCategory === c.slug
+                ? 'bg-primary-strong text-on-primary font-semibold shadow-stacked-sm'
+                : 'bg-secondary-bg text-ink-soft hover:bg-secondary-pressed',
+            ]}
+          >
+            {c.label}
+          </a>
+        ))
+      }
     </nav>
-    <div id="category-strip-fade" class="pointer-events-none absolute inset-y-0 right-0 w-10 bg-gradient-to-l from-surface-soft to-transparent transition-opacity duration-200" aria-hidden="true"></div>
-  </div>
-
-  <!-- Mobile Drawer Menu -->
-  <div id="mobile-menu-drawer" class="hidden lg:hidden border-b border-hairline bg-canvas px-4 py-4 space-y-2 shadow-stacked-lg text-xs font-semibold">
-    <a href="/" class={`block px-3.5 py-2 rounded-md ${isNewsActive ? 'bg-primary-strong text-on-primary font-bold shadow-stacked-sm' : 'text-ink hover:bg-surface-card'}`}>
-      News
-    </a>
-    <a href="/fact-check" class={`block px-3.5 py-2 rounded-md ${isVerifyActive ? 'bg-primary-strong text-on-primary font-bold shadow-stacked-sm' : 'text-primary-strong hover:bg-surface-card'}`}>
-      Fact Check
-    </a>
-
-    <div class="pt-2 mt-2 border-t border-hairline-soft">
-      <p class="px-3.5 pb-1 font-mono-caption text-mute">SHOW SECTIONS FOR</p>
-      {RAIL_TOPICS.map((topic) => (
-        <label class="flex items-center gap-2 px-3.5 py-2 text-ink cursor-pointer">
-          <input type="checkbox" data-topic-toggle={topic.label} class="accent-primary-strong" />
-          {topic.label}
-        </label>
-      ))}
-    </div>
-
-    <div class="pt-2 mt-2 border-t border-hairline-soft">
-      <p class="px-3.5 pb-1 font-mono-caption text-mute">CATEGORIES</p>
-      {CATEGORIES.map((c) => (
-        <a
-          href={`/category/${c.slug}`}
-          aria-current={activeCategory === c.slug ? 'page' : undefined}
-          class={`block px-3.5 py-2 rounded-md ${
-            activeCategory === c.slug
-              ? 'bg-primary-strong text-on-primary font-bold shadow-stacked-sm'
-              : 'text-ink hover:bg-surface-card'
-          }`}
-        >
-          {c.label}
-        </a>
-      ))}
+    <div
+      id="category-strip-fade"
+      class="pointer-events-none absolute inset-y-0 right-0 w-10 bg-gradient-to-l from-surface-soft to-transparent transition-opacity duration-200"
+      aria-hidden="true"
+    >
     </div>
   </div>
 </header>
 
+<!-- Mobile menu. Escape, focus trap, focus restoration and scroll lock all
+     come from the shared Dialog. -->
+<Dialog id="mobile-menu" title="Menu" variant="drawer-left" class="lg:hidden">
+  <nav aria-label="Mobile" class="flex flex-col gap-1">
+    {
+      DESTINATIONS.map((d) => (
+        <a
+          href={d.href}
+          aria-current={isCurrent(d.href, d.exact) ? 'page' : undefined}
+          class:list={[
+            'flex min-h-11 items-center rounded-md px-3.5 text-sm font-semibold',
+            isCurrent(d.href, d.exact)
+              ? 'bg-primary-strong text-on-primary shadow-stacked-sm'
+              : 'text-ink hover:bg-surface-card',
+          ]}
+        >
+          {d.label}
+        </a>
+      ))
+    }
+  </nav>
+
+  <div class="mt-4 border-t border-hairline-soft pt-3">
+    <p class="font-mono-caption px-3.5 pb-1 text-mute">Show sections for</p>
+    {
+      RAIL_TOPICS.map((topic) => (
+        <label class="flex min-h-11 cursor-pointer items-center gap-2.5 px-3.5 text-sm text-ink">
+          <input type="checkbox" data-topic-toggle={topic.label} class="accent-primary-strong" />
+          {topic.label}
+        </label>
+      ))
+    }
+  </div>
+
+  <div class="mt-4 border-t border-hairline-soft pt-3">
+    <p class="font-mono-caption px-3.5 pb-1 text-mute">Categories</p>
+    {
+      CATEGORIES.map((c) => (
+        <a
+          href={`/category/${c.slug}`}
+          aria-current={activeCategory === c.slug ? 'page' : undefined}
+          class:list={[
+            'flex min-h-11 items-center rounded-md px-3.5 text-sm font-medium',
+            activeCategory === c.slug
+              ? 'bg-primary-strong text-on-primary font-semibold shadow-stacked-sm'
+              : 'text-ink hover:bg-surface-card',
+          ]}
+        >
+          {c.label}
+        </a>
+      ))
+    }
+  </div>
+</Dialog>
+
+<!-- Topics chooser (desktop). Was an unlabelled role="menu" popover with no
+     keyboard model and no focus return (audit A-04). -->
+<Dialog id="topics-dialog" title="Customize topics" variant="center" class="hidden lg:block">
+  <p class="mb-3 text-sm text-body">Choose which sections appear on the homepage.</p>
+  {
+    RAIL_TOPICS.map((topic) => (
+      <label class="flex min-h-11 cursor-pointer items-center gap-2.5 text-sm text-ink">
+        <input type="checkbox" data-topic-toggle={topic.label} class="accent-primary-strong" />
+        {topic.label}
+      </label>
+    ))
+  }
+</Dialog>
+
+<style>
+  /* A collapsed strip still contains focusable links. Without this, tabbing
+     into the category list while scrolled down would move focus to a control
+     with zero height and no visible focus ring — the classic hidden-but-
+     focusable trap. Focus reopens the strip instead. */
+  #category-strip-wrap:focus-within {
+    max-height: none;
+    opacity: 1;
+    overflow: visible;
+  }
+</style>
+
 <script>
-  // Theme Toggle across all triggers
-  document.querySelectorAll('.theme-toggle-trigger').forEach(btn => {
+  // Theme toggle, across every trigger on the page.
+  for (const btn of document.querySelectorAll('.theme-toggle-trigger')) {
     btn.addEventListener('click', () => {
       const isDark = document.documentElement.classList.toggle('dark');
       localStorage.setItem('theme', isDark ? 'dark' : 'light');
     });
-  });
+  }
 
-  // Mobile Drawer Toggle
-  const mobileBtn = document.getElementById('mobile-menu-btn');
-  const mobileDrawer = document.getElementById('mobile-menu-drawer');
-  mobileBtn?.addEventListener('click', () => {
-    const isOpen = mobileDrawer?.classList.toggle('hidden') === false;
-    mobileBtn.setAttribute('aria-expanded', String(isOpen));
-  });
-
-  // Customize-topics popover
-  const topicsToggle = document.getElementById('topics-toggle');
-  const topicsPanel = document.getElementById('topics-panel');
-  topicsToggle?.addEventListener('click', () => {
-    const isHidden = topicsPanel?.toggleAttribute('hidden');
-    topicsToggle.setAttribute('aria-expanded', String(isHidden === false));
-  });
-  document.addEventListener('click', (e) => {
-    if (!topicsPanel || topicsPanel.hidden) return;
-    const target = e.target as Node;
-    if (topicsPanel.contains(target) || topicsToggle?.contains(target)) return;
-    topicsPanel.hidden = true;
-    topicsToggle?.setAttribute('aria-expanded', 'false');
-  });
-
-  // Language selector. Navigating (rather than refetching client-side) keeps
-  // the choice in the URL, so it is shareable and survives a reload. The
-  // localStorage copy is what the masthead date listens to.
+  // Language selector lives in MastheadInfoStrip; navigating rather than
+  // refetching keeps the choice in the URL, so it is shareable and survives a
+  // reload.
   const langSelect = document.getElementById('language-select') as HTMLSelectElement | null;
   langSelect?.addEventListener('change', () => {
     const code = langSelect.value;
@@ -223,23 +306,25 @@ const activeCategory = currentPath.startsWith('/category/')
     window.location.assign(url.toString());
   });
 
-  // Category strip edge fade: hide once scrolled to the end, or if it
-  // doesn't overflow at all, so the hint never lies about there being more.
+  // Category strip edge fade: hidden once scrolled to the end, or if there is
+  // no overflow, so the hint never lies about there being more.
   const categoryStrip = document.getElementById('category-strip');
   const categoryFade = document.getElementById('category-strip-fade');
   if (categoryStrip && categoryFade) {
     const updateFade = () => {
-      const atEnd = categoryStrip.scrollLeft + categoryStrip.clientWidth >= categoryStrip.scrollWidth - 1;
+      const atEnd =
+        categoryStrip.scrollLeft + categoryStrip.clientWidth >= categoryStrip.scrollWidth - 1;
       categoryFade.style.opacity = atEnd ? '0' : '1';
     };
     updateFade();
     categoryStrip.addEventListener('scroll', updateFade, { passive: true });
     window.addEventListener('resize', updateFade);
 
-    // One-time "peek" nudge: on first load, if there's more to see, scroll a
-    // little and spring back. Motion is a far stronger scroll affordance
-    // than a static fade, especially on touch screens.
-    if (categoryStrip.scrollWidth > categoryStrip.clientWidth) {
+    // One-time peek nudge — a far stronger scroll affordance than a static
+    // fade on touch screens. Skipped entirely under reduced motion, per §9 of
+    // the UI/UX spec.
+    const reduced = window.matchMedia('(prefers-reduced-motion: reduce)');
+    if (!reduced.matches && categoryStrip.scrollWidth > categoryStrip.clientWidth) {
       setTimeout(() => {
         categoryStrip.scrollTo({ left: 56, behavior: 'smooth' });
         setTimeout(() => categoryStrip.scrollTo({ left: 0, behavior: 'smooth' }), 450);
@@ -247,14 +332,15 @@ const activeCategory = currentPath.startsWith('/category/')
     }
   }
 
-  // Hide the header on scroll-down past the fold, reveal on scroll-up. Two
-  // sticky rows (nav + category strip) cost ~107px of a phone viewport, so
-  // giving that back while reading is worth more than permanent visibility.
-  const header = document.getElementById('site-header');
-  if (header) {
+  // Collapse only the category strip on scroll-down, not the whole header.
+  // Hiding the header took the site landmark and the brand link off screen,
+  // which breaks magnifier navigation (audit A-08); collapsing one row gives
+  // back the same 44px without that cost.
+  const stripWrap = document.getElementById('category-strip-wrap');
+  if (stripWrap) {
     let lastY = window.scrollY;
     let ticking = false;
-    const REVEAL_THRESHOLD = 120; // px scrolled before hiding kicks in
+    const THRESHOLD = 120;
 
     window.addEventListener(
       'scroll',
@@ -263,8 +349,10 @@ const activeCategory = currentPath.startsWith('/category/')
         ticking = true;
         requestAnimationFrame(() => {
           const y = window.scrollY;
-          const scrollingDown = y > lastY;
-          header.classList.toggle('-translate-y-full', scrollingDown && y > REVEAL_THRESHOLD);
+          const hide = y > lastY && y > THRESHOLD;
+          stripWrap.classList.toggle('max-h-0', hide);
+          stripWrap.classList.toggle('opacity-0', hide);
+          stripWrap.classList.toggle('overflow-hidden', hide);
           lastY = y;
           ticking = false;
         });

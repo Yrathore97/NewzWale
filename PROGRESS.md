@@ -9,6 +9,102 @@ Full task list and rationale: `docs/superpowers/plans/2026-08-05-newzwale-rebuil
 
 ---
 
+## Status — Doc-Phase P6 (UI redesign) COMPLETE (uncommitted)
+
+Built on P5 (`8f36570`). Frontend/UI only — no D1 schema, migration, API
+envelope, cursor-semantics, evidence-engine, verdict-semantics, or legacy-API
+change (all verified by an empty `git diff` over those paths).
+
+**1014 tests pass** (976 → 1014, +38; 0 removed/weakened/skipped), `astro
+check` 0/0/0 (186 files), production build PASS.
+
+### Delivered
+
+- **Foundation.** Self-hosted Inter + JetBrains Mono (`public/fonts/*`,
+  `src/styles/fonts.css`); the render-blocking Google Fonts `@import` and both
+  third-party font origins are gone from the CSP. Dynamic `<html lang>`/`dir`
+  from the content language (`languageDir()` — Urdu is RTL, the other 12 LTR),
+  closing A-01. Two new verdict tokens only (`--color-verdict-misleading`
+  orange, `--color-verdict-context` blue), chosen by measurement; 32 new
+  contrast assertions (16 pairings/colour × the four surfaces × two themes,
+  plus reuse/CVD/stance checks).
+- **Shared primitives.** `Dialog` (one focus-trap implementation for all three
+  overlays — closes A-03/A-04/A-05), `Skeleton`, `EmptyState`, `ErrorState`.
+- **Shell.** `BottomNav` (straight cutover, Fact Check centred, safe-area,
+  44×44, `aria-current`), reworked `Navbar` (five destinations = BottomNav),
+  masthead weather moved to `/api/v1/weather` — the three browser-side
+  third-party calls and the gesture-less geolocation prompt are deleted,
+  closing S-09/A-07; CSP `connect-src` and `permissions-policy: geolocation=()`
+  tightened, with the old assertions inverted to lock it.
+- **News.** `NewsFeed` `buildCard()`/dup helpers deleted — server and
+  "Load more" paths now clone one `ArticleCard` template. Card: category out of
+  the image (A-06), 44×44 `aria-pressed` save, 16/9 aspect-ratio CLS
+  reservation. `CategoryRail` empty state. New `CoverageList`, `TrendingList`,
+  `FactCheckChip`, `ReadingTime`, `StoryHeader`, `ArticleGrid`.
+  `MostReadSidebar` → honest "Latest" + link to ranked `/trending`. `HeroMesh`
+  fake DOM-filter replaced with a real `/fact-check` claim input + paste.
+- **Fact check.** Twelve documented components; single-input flow
+  (detect→confirm→staged progress→result); six verdicts as icon+label+form
+  (PARTLY_TRUE solid vs MISLEADING outline — CVD-safe, not hue-alone);
+  four-segment evidence-strength meter (never a %); contradicting evidence
+  never collapsed; `aria-live="polite"` stage announcements. The old
+  incomplete `role="tablist"` is gone (A-02 resolved by removal — the flow is
+  sequential steps, not tabs). Evidence rendering stays
+  `createElement`/`textContent`/`safeHref`; no `innerHTML`.
+- **History/Saved.** `src/lib/history/factcheck-history.ts` — localStorage
+  only, capped at 50 (oldest evicted), written only on a persisted success;
+  `/fact-check/history` with verdict filter chips + counts, "stored on this
+  device / not synced" copy, honest empty/malformed-storage states. `/saved`
+  kept as a full page (BottomNav "You" links to it); `window.NZ` unchanged.
+
+### QA results (2026-08-13)
+
+- **Responsive 320/640/1024/1280** — homepage verified at all four (no
+  horizontal overflow; 2-col@640, 3-col+sidebar@1024, BottomNav cutover at
+  1024). `/news`, `/search`, `/saved`, `/methodology`, `/fact-check` verified
+  at 320. No document horizontal scroll at 320px on any page tested.
+- **Keyboard/ARIA** — skip link present (target exists; the harness pane could
+  not register `:focus` programmatically, markup is the unchanged standard
+  Layout pattern); all three `Dialog` variants verified: focus-in, trap wrap,
+  Escape, focus restoration, body scroll lock, `aria-modal`/`role`/labelling;
+  BottomNav all five links tab-reachable with `aria-current`; no `role="tab"`
+  anywhere (A-02 resolved by removal); touch targets ≥44×44.
+- **Screen-reader** — a true AT (NVDA/VoiceOver) was **not available in this
+  environment**; ARIA semantics were inspected and keyboard/focus were
+  browser-tested. Not claimed as a screen-reader pass.
+- **Reduced-motion** — CSS coverage verified structurally: the global block
+  targets `.animate-marquee` plus a universal `*,::before,::after` rule with
+  `!important` collapsing every animation/transition (skeleton pulse, dialog
+  transitions included). Dialogs and progress are state-driven, not
+  animation-gated, so they function with instant transitions; JS peek-nudges
+  are `matchMedia`-guarded. Live media emulation was not available in the pane.
+- **RTL** — en `ltr`, hi `ltr`, ur `rtl` all verified; Urdu nav reverses at
+  mobile (Home→right) and desktop (logo→right), no overflow, no clipped
+  headlines.
+- **Contrast** — 28 assertions pass; blue/orange pairings and the
+  PARTLY_TRUE-vs-MISLEADING form distinction verified live in the browser.
+- **Security/regression** — full suite 1014, security/adversarial 208,
+  migration 55, golden 15, `astro check` clean, build clean. No `innerHTML` in
+  tracked source, no browser weather/geolocation call, no hardcoded secret, no
+  new dependency, legacy/`/api/v1`/D1/evidence-engine paths untouched.
+
+### Known limitations
+
+- D1-backed *populated* states (`/news`, `/news/[slug]`, `/trending`,
+  `/search` results, `/fact-check/[id]`) cannot render locally without a D1
+  binding, so their live population and the "Check this as a claim →"
+  successful-empty-search state were code-verified rather than browser-verified
+  in this session. The controlled 404/503/error states on those routes *were*
+  browser-verified. The homepage (legacy `/api/news`) and the full fact-check
+  flow (legacy `/api/factcheck`) render real data locally and were exercised
+  end to end.
+- `/methodology` retains P5's 14px body text (not in the P6 changed-file set;
+  has no form inputs, so the 16px iOS-zoom rationale does not apply). Left
+  untouched to avoid out-of-scope edits.
+- Screen-reader pass not performed (no AT in environment) — see above.
+
+---
+
 ## Status — Doc-Phase P5 (Routes and IA) COMPLETE (uncommitted)
 
 Committed baseline: `c6a724e` (5A+5B+5C+P7). This section is everything since.
@@ -587,7 +683,10 @@ so it does not get re-litigated.
   says so explicitly rather than over-promising.
 - In-site article reading. Headlines still link out to the publisher; hosting
   article bodies is a licensing question, not an engineering one.
-- Keyboard arrow-key navigation between fact-check tabs (roving tabindex) is not implemented; tabs are reachable by Tab and activate on Enter/Space, which is workable but not the full ARIA tabs pattern.
+- ~~Keyboard arrow-key navigation between fact-check tabs (roving tabindex)~~ — **resolved in P6 by removing the tabs.** The fact-check UI is now a
+  single-input sequential flow (input → confirm → progress → result), so there
+  is no tablist to give an ARIA tabs pattern to. No `role="tab"` remains
+  anywhere in the app.
 
 ---
 

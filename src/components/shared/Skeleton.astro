@@ -1,0 +1,112 @@
+---
+/** Loading placeholders that match final geometry.
+ *
+ *  "Skeletons must match final geometry to prevent layout shift"
+ *  (NEWZWALE_UI_UX_SPEC §6). The `card` variant therefore mirrors
+ *  ArticleCard.astro exactly: h-44 image box, p-4 body, the same meta/headline/
+ *  summary rhythm and the same bordered value row. If ArticleCard's geometry
+ *  changes, this changes with it — that is the whole point of the variant.
+ *
+ *  The pulse is a plain CSS animation, so the global prefers-reduced-motion
+ *  block already stops it.
+ */
+interface Props {
+  variant?: 'card' | 'lead' | 'row' | 'text' | 'chip' | 'evidence';
+  /** How many placeholders to render. */
+  count?: number;
+  /** Announced to assistive tech. Say what is loading, not "Loading…". */
+  label?: string;
+  class?: string;
+}
+
+const { variant = 'card', count = 1, label = 'Loading', class: extraClass = '' } = Astro.props;
+
+const items = Array.from({ length: Math.max(1, count) });
+const bar = 'bg-secondary-bg rounded-sm';
+---
+
+<div role="status" aria-live="polite" aria-busy="true" class:list={['contents', extraClass]}>
+  <span class="sr-only">{label}</span>
+
+  {
+    items.map(() => (
+      <div class="nz-skeleton" aria-hidden="true">
+        {variant === 'card' && (
+          <div class="bg-surface-elevated border border-hairline rounded-md overflow-hidden h-full flex flex-col">
+            <div class={`h-44 w-full ${bar} rounded-none`} />
+            <div class="p-4 flex-1 flex flex-col justify-between space-y-3">
+              <div>
+                <div class={`h-3 w-24 mb-1.5 ${bar}`} />
+                <div class={`h-4 w-full mb-2 ${bar}`} />
+                <div class={`h-4 w-4/5 mb-2 ${bar}`} />
+                <div class={`h-3 w-full mb-1 ${bar}`} />
+                <div class={`h-3 w-3/5 ${bar}`} />
+              </div>
+              <div class="pt-3 border-t border-hairline flex items-center justify-between">
+                <div class={`h-3 w-20 ${bar}`} />
+                <div class={`h-6 w-28 ${bar}`} />
+              </div>
+            </div>
+          </div>
+        )}
+
+        {variant === 'lead' && (
+          <div class="bg-surface-elevated border border-hairline rounded-md overflow-hidden">
+            <div class={`h-72 sm:h-96 w-full ${bar} rounded-none`} />
+            <div class="p-4 space-y-3">
+              <div class={`h-3 w-28 ${bar}`} />
+              <div class={`h-7 w-11/12 ${bar}`} />
+              <div class={`h-7 w-3/4 ${bar}`} />
+              <div class={`h-4 w-full ${bar}`} />
+            </div>
+          </div>
+        )}
+
+        {variant === 'row' && (
+          <div class="flex items-start gap-3 py-3 border-b border-hairline">
+            <div class="flex-1 space-y-2">
+              <div class={`h-3 w-24 ${bar}`} />
+              <div class={`h-4 w-full ${bar}`} />
+              <div class={`h-4 w-2/3 ${bar}`} />
+            </div>
+          </div>
+        )}
+
+        {variant === 'evidence' && (
+          <div class="border-l-[3px] border-stone pl-4 py-3 space-y-2">
+            <div class={`h-3 w-40 ${bar}`} />
+            <div class={`h-3 w-32 ${bar}`} />
+            <div class={`h-4 w-full ${bar}`} />
+            <div class={`h-4 w-5/6 ${bar}`} />
+          </div>
+        )}
+
+        {variant === 'chip' && <div class={`h-9 w-24 rounded-full ${bar}`} />}
+
+        {variant === 'text' && (
+          <div class="space-y-2">
+            <div class={`h-4 w-full ${bar}`} />
+            <div class={`h-4 w-11/12 ${bar}`} />
+            <div class={`h-4 w-2/3 ${bar}`} />
+          </div>
+        )}
+      </div>
+    ))
+  }
+</div>
+
+<style>
+  @keyframes nz-skeleton-pulse {
+    0%,
+    100% {
+      opacity: 1;
+    }
+    50% {
+      opacity: 0.55;
+    }
+  }
+
+  .nz-skeleton {
+    animation: nz-skeleton-pulse 1.6s ease-in-out infinite;
+  }
+</style>

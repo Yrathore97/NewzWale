@@ -1,0 +1,68 @@
+---
+/** "Errors say what failed" (NEWZWALE_UI_UX_SPEC §1 rule 5, §6 cross-cutting).
+ *
+ *  The spec bans "Something went wrong" outright: error copy must name what
+ *  failed and what to do about it. `title` is therefore required and should
+ *  read like "Couldn't load headlines", not like a status code.
+ *
+ *  role="alert" so the failure is announced rather than silently replacing the
+ *  content a screen-reader user was waiting for.
+ */
+interface Props {
+  title: string;
+  /** What the reader can do. Kept separate from the title so the title stays
+   *  short enough to scan. */
+  description?: string;
+  /** Renders a retry control. Wire it with data-nz-retry on the consumer side,
+   *  or pass retryHref for a plain full-page reload path. */
+  retryLabel?: string;
+  retryHref?: string;
+  /** Value echoed on the button as data-nz-retry, for client-side handlers. */
+  retryTarget?: string;
+  class?: string;
+}
+
+const {
+  title,
+  description,
+  retryLabel = 'Try again',
+  retryHref,
+  retryTarget,
+  class: extraClass = '',
+} = Astro.props;
+---
+
+<div
+  role="alert"
+  class:list={[
+    'rounded-md border border-stone bg-surface-soft px-5 py-6 text-center',
+    extraClass,
+  ]}
+>
+  <h3 class="text-base font-semibold text-ink">{title}</h3>
+
+  {description && <p class="mt-2 text-sm leading-relaxed text-body">{description}</p>}
+
+  <slot />
+
+  {
+    retryHref ? (
+      <a
+        href={retryHref}
+        class="btn-pill-secondary mt-4 inline-flex min-h-11 items-center px-5 text-sm"
+      >
+        {retryLabel}
+      </a>
+    ) : (
+      retryTarget && (
+        <button
+          type="button"
+          data-nz-retry={retryTarget}
+          class="btn-pill-secondary mt-4 inline-flex min-h-11 cursor-pointer items-center px-5 text-sm"
+        >
+          {retryLabel}
+        </button>
+      )
+    )
+  }
+</div>

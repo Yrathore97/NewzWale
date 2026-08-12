@@ -3,24 +3,40 @@ import type { Article } from '../lib/news/types';
 import { RAIL_TOPICS } from '../lib/news/categories';
 
 interface Props {
+  /** These are the most RECENT articles, not the most read. The prop name is
+   *  kept for call-site compatibility; the label is not. */
   trending: Article[];
 }
 
 const { trending } = Astro.props;
 ---
 
+<!-- This panel was headed "Most Read" and fed `top.slice(0, 5)` — the newest
+     five headlines (audit §5, NEWZWALE_UI_UX_SPEC §2 "Redesign"). NewzWale has
+     no read-count infrastructure, and inventing one to justify a heading would
+     be the wrong way round. So the heading now says what the data actually is,
+     and links to /trending, which IS ranked, and by a published method.
+     Nothing here counts reads, and nothing here claims to. -->
+
 <aside class="flex flex-col gap-6 self-start lg:sticky lg:top-[100px]">
   <div class="bg-surface-elevated border border-hairline rounded-md p-5 shadow-stacked-sm">
-    <h2 class="text-sm font-bold text-ink mb-3.5">Most Read</h2>
+    <div class="mb-3.5 flex items-baseline justify-between gap-2">
+      <h2 class="text-sm font-bold text-ink">Latest</h2>
+      <a href="/trending" class="font-mono-caption text-primary-strong hover:underline">
+        See trending
+      </a>
+    </div>
     <div class="flex flex-col gap-3.5">
       {trending.map((article, i) => (
         <a
           href={article.url}
           target="_blank"
           rel="noopener noreferrer"
-          class="flex gap-3 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-strong rounded-sm"
+          class="flex min-h-11 items-start gap-3 rounded-sm focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-strong"
         >
-          <span class="font-mono text-lg font-bold text-stone shrink-0">{i + 1}</span>
+          {/* Position in a recency list, not a rank. aria-hidden so it is not
+              read out as a ranking. */}
+          <span class="shrink-0 font-mono text-lg font-bold text-stone" aria-hidden="true">{i + 1}</span>
           <span class="text-[13.5px] font-medium leading-snug text-ink">{article.title}</span>
         </a>
       ))}
@@ -34,7 +50,7 @@ const { trending } = Astro.props;
             type="button"
             data-topic-toggle={topic.label}
             aria-pressed="false"
-            class="topic-chip px-3 py-1 rounded-full text-xs bg-secondary-bg text-ink-soft border-none cursor-pointer transition-colors"
+            class="topic-chip min-h-11 cursor-pointer rounded-full border-none bg-secondary-bg px-3 text-xs text-ink-soft transition-colors"
           >
             {topic.label}
           </button>

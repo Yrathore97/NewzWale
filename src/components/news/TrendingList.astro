@@ -1,0 +1,59 @@
+---
+import type { ApiStory } from '../../lib/news/read';
+import EmptyState from '../shared/EmptyState.astro';
+
+/** Ranked story clusters.
+ *
+ *  The rank number is real: it is the order `rankTrending` produced, and the
+ *  "N sources" figure beside it is the independent-publisher count the score
+ *  was actually computed from. Both come from the trending pipeline; neither is
+ *  decoration.
+ *
+ *  A story needs TRENDING_MIN_SOURCES independent publishers before it can
+ *  appear at all, so an empty list means "not enough coverage yet", not "no
+ *  news" — and it says exactly that.
+ */
+interface Props {
+  stories: ApiStory[];
+  class?: string;
+}
+
+const { stories, class: extraClass = '' } = Astro.props;
+---
+
+{
+  stories.length === 0 ? (
+    <EmptyState
+      title="Not enough coverage yet to rank stories"
+      description="Trending ranks stories by how many independent publishers are covering them. Nothing has cleared that bar in the current window."
+      actionLabel="Read the latest headlines"
+      actionHref="/news"
+      class={extraClass}
+    />
+  ) : (
+    <ol class:list={['flex flex-col', extraClass]}>
+      {stories.map((s, i) => (
+        <li class="border-b border-hairline last:border-b-0">
+          <a
+            href={`/news?category=${encodeURIComponent(s.category)}`}
+            class="flex min-h-11 items-start gap-3 py-4"
+          >
+            <span class="font-mono text-lg font-bold leading-none text-stone" aria-hidden="true">
+              {i + 1}
+            </span>
+            <span class="flex flex-col gap-1">
+              <span class="text-[15px] font-semibold leading-snug text-ink">{s.headline}</span>
+              <span class="font-mono-caption text-mute">
+                <span class="capitalize">{s.category}</span>
+                {' · '}
+                {s.sourceCount} independent {s.sourceCount === 1 ? 'source' : 'sources'}
+                {' · '}
+                {s.articleCount} {s.articleCount === 1 ? 'report' : 'reports'}
+              </span>
+            </span>
+          </a>
+        </li>
+      ))}
+    </ol>
+  )
+}

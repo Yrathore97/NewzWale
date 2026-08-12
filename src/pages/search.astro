@@ -3,6 +3,10 @@ import Layout from '../layouts/Layout.astro';
 import Navbar from '../components/Navbar.astro';
 import MastheadInfoStrip from '../components/MastheadInfoStrip.astro';
 import ArticleCard from '../components/ArticleCard.astro';
+import ArticleGrid from '../components/news/ArticleGrid.astro';
+import FactCheckChip from '../components/news/FactCheckChip.astro';
+import EmptyState from '../components/shared/EmptyState.astro';
+import ErrorState from '../components/shared/ErrorState.astro';
 import Footer from '../components/Footer.astro';
 import type { ApiArticle } from '../lib/news/read';
 import type { FactCheckRecord } from '../lib/db/repositories/fact-checks';
@@ -73,73 +77,85 @@ if (q) {
           value={q}
           placeholder="Search news and fact-checks…"
           aria-label="Search query"
-          class="flex-1 px-4 py-2.5 bg-surface-elevated border border-hairline rounded-md text-sm text-ink placeholder:text-mute"
+          class="min-h-11 flex-1 rounded-sm border border-hairline bg-surface-elevated px-4 py-2.5 text-sm text-ink placeholder:text-mute"
         />
-        <select name="type" aria-label="Search in" class="px-3 py-2.5 bg-surface-elevated border border-hairline rounded-md text-sm text-ink">
+        <select name="type" aria-label="Search in" class="min-h-11 rounded-sm border border-hairline bg-surface-elevated px-3 py-2.5 text-sm text-ink">
           <option value="news" selected={type === 'news'}>News</option>
           <option value="factcheck" selected={type === 'factcheck'}>Fact checks</option>
           <option value="all" selected={type === 'all'}>Both</option>
         </select>
-        <button type="submit" class="px-6 py-2.5 bg-primary-strong hover:bg-primary-pressed text-on-primary text-sm font-semibold rounded-md shadow-stacked-sm transition-colors">
+        <button type="submit" class="btn-pill-primary min-h-11 px-6 text-sm">
           Search
         </button>
       </form>
     </div>
 
     <div class="max-w-[1400px] mx-auto px-4 sm:px-6 space-y-8">
-      {!q ? (
-        <p class="text-sm opacity-70 text-body">Enter a search term above.</p>
-      ) : error ? (
-        <p class="text-sm text-body bg-surface-elevated border border-hairline rounded-md p-4">{error}</p>
-      ) : (
-        <>
-          {(type === 'news' || type === 'all') && (
-            <section>
-              {type === 'all' && <h2 class="text-lg font-semibold text-ink mb-3">News</h2>}
-              {news.length === 0 ? (
-                <p class="text-sm opacity-70 text-body">No matching articles.</p>
-              ) : (
-                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-                  {news.map((a) => (
-                    <ArticleCard
-                      article={{
-                        id: a.id,
-                        title: a.title,
-                        url: a.url,
-                        summary: a.summary ?? '',
-                        imageUrl: a.imageUrl,
-                        source: a.source,
-                        category: a.category,
-                        publishedAt: a.publishedAt ?? '',
-                      }}
-                    />
-                  ))}
-                </div>
-              )}
-            </section>
-          )}
+      {
+        !q ? (
+          <p class="text-sm text-body opacity-70">Enter a search term above.</p>
+        ) : error ? (
+          <ErrorState title="Couldn't search" description={error} retryLabel="Try again" retryHref={`/search?q=${encodeURIComponent(q)}&type=${type}`} />
+        ) : (
+          <>
+            {(type === 'news' || type === 'all') && (
+              <section>
+                {type === 'all' && <h2 class="mb-3 text-lg font-semibold text-ink">News</h2>}
+                {news.length === 0 ? (
+                  <EmptyState
+                    title={`No results for "${q}"`}
+                    description="No indexed headlines match that search."
+                    actionLabel="Check this as a claim →"
+                    actionHref={`/fact-check?claim=${encodeURIComponent(q)}`}
+                  />
+                ) : (
+                  <ArticleGrid>
+                    {news.map((a) => (
+                      <ArticleCard
+                        article={{
+                          id: a.id,
+                          title: a.title,
+                          url: a.url,
+                          summary: a.summary ?? '',
+                          imageUrl: a.imageUrl,
+                          source: a.source,
+                          category: a.category,
+                          publishedAt: a.publishedAt ?? '',
+                        }}
+                      />
+                    ))}
+                  </ArticleGrid>
+                )}
+              </section>
+            )}
 
-          {(type === 'factcheck' || type === 'all') && (
-            <section>
-              {type === 'all' && <h2 class="text-lg font-semibold text-ink mb-3">Fact checks</h2>}
-              {factChecks.length === 0 ? (
-                <p class="text-sm opacity-70 text-body">No matching fact-checks.</p>
-              ) : (
-                <ul class="space-y-3">
-                  {factChecks.map((fc) => (
-                    <li class="p-4 bg-surface-elevated border border-hairline rounded-md">
-                      <a href={`/fact-check/${fc.id}`} class="text-sm font-semibold text-ink hover:text-primary-strong">
-                        {fc.claim}
-                      </a>
-                      <p class="text-xs text-mute mt-1">{fc.summary}</p>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </section>
-          )}
-        </>
-      )}
+            {(type === 'factcheck' || type === 'all') && (
+              <section>
+                {type === 'all' && <h2 class="mb-3 text-lg font-semibold text-ink">Fact checks</h2>}
+                {factChecks.length === 0 ? (
+                  <EmptyState
+                    title={`No fact-checks for "${q}"`}
+                    description="Nothing in the fact-check archive matches that search."
+                    actionLabel="Check this as a claim →"
+                    actionHref={`/fact-check?claim=${encodeURIComponent(q)}`}
+                  />
+                ) : (
+                  <ul class="flex flex-col divide-y divide-hairline-soft">
+                    {factChecks.map((fc) => (
+                      <li class="py-3">
+                        <a href={`/fact-check/${fc.id}`} class="flex min-h-11 flex-col gap-2">
+                          <span class="text-[15px] font-medium leading-snug text-ink">{fc.claim}</span>
+                          <FactCheckChip verdict={fc.verdict} />
+                        </a>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </section>
+            )}
+          </>
+        )
+      }
     </div>
   </main>
 

@@ -1,0 +1,187 @@
+---
+/** Accessible dialog shell — the one overlay primitive.
+ *
+ *  Replaces three partial implementations (audit A-03 mobile drawer, A-04
+ *  topics popover, A-05 saved drawer). Behaviour lives in lib/ui/dialog.ts;
+ *  this component is markup plus declarative wiring.
+ *
+ *  Usage:
+ *    <button data-nz-dialog-toggle="saved-drawer" aria-expanded="false"
+ *            aria-controls="saved-drawer">Saved</button>
+ *    <Dialog id="saved-drawer" title="Saved articles" variant="drawer-right">
+ *      …
+ *    </Dialog>
+ *
+ *  Any element carrying data-nz-dialog-open / -close / -toggle with the
+ *  dialog's id controls it; no per-dialog script is needed.
+ */
+interface Props {
+  /** Also the aria-controls target for triggers. */
+  id: string;
+  /** Accessible name. Rendered as a visible heading unless `hideTitle`. */
+  title: string;
+  /** Hide the heading visually but keep it for assistive tech. */
+  hideTitle?: boolean;
+  variant?: 'drawer-right' | 'drawer-left' | 'sheet' | 'center';
+  /** Popovers (the topics menu) trap focus and close on Escape, but must not
+   *  lock the page behind them or claim aria-modal. */
+  modal?: boolean;
+  /** Extra classes on the panel. */
+  class?: string;
+  /** Omits the built-in close button for panels that supply their own. */
+  hideClose?: boolean;
+}
+
+const {
+  id,
+  title,
+  hideTitle = false,
+  variant = 'drawer-right',
+  modal = true,
+  class: extraClass = '',
+  hideClose = false,
+} = Astro.props;
+
+const titleId = `${id}-title`;
+
+const PANEL_BASE =
+  'fixed z-[81] bg-surface-elevated shadow-stacked-lg overflow-y-auto overscroll-contain';
+
+const PANEL_VARIANT: Record<string, string> = {
+  // max-w-[90vw] keeps the drawer off the edge at 320px.
+  'drawer-right': 'top-0 right-0 h-full w-[320px] max-w-[90vw] p-5 sm:p-6',
+  'drawer-left': 'top-0 left-0 h-full w-[300px] max-w-[90vw] p-5 sm:p-6',
+  // Bottom sheet sits above the bottom nav and respects the home indicator.
+  sheet:
+    'bottom-0 left-0 right-0 w-full max-h-[85vh] rounded-t-[16px] p-5 pb-[calc(1.25rem+env(safe-area-inset-bottom))]',
+  center:
+    'top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[min(32rem,calc(100vw-2rem))] max-h-[85vh] rounded-md p-5 sm:p-6',
+};
+---
+
+<div
+  data-nz-dialog-overlay={id}
+  hidden
+  class="fixed inset-0 z-[80] bg-ink/40"
+>
+</div>
+
+<div
+  id={id}
+  role="dialog"
+  aria-labelledby={titleId}
+  data-nz-dialog={id}
+  data-nz-dialog-variant={variant}
+  data-nz-dialog-modal={String(modal)}
+  hidden
+  class:list={[PANEL_BASE, PANEL_VARIANT[variant], extraClass]}
+>
+  <div class:list={['flex items-start justify-between gap-4', hideTitle ? 'sr-only' : 'mb-4']}>
+    <h2 id={titleId} class="text-lg font-bold text-ink">{title}</h2>
+    {
+      !hideClose && (
+        <button
+          type="button"
+          data-nz-dialog-close={id}
+          aria-label={`Close ${title.toLowerCase()}`}
+          class="-mr-1.5 -mt-1.5 inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-ink hover:bg-secondary-bg"
+        >
+          <span aria-hidden="true" class="text-base leading-none">✕</span>
+        </button>
+      )
+    }
+  </div>
+
+  <slot />
+</div>
+
+<style>
+  /* Motion budget from NEWZWALE_DESIGN_DIRECTION §5: 250ms in, 180ms out,
+     ease-out entering and ease-in leaving. The global
+     prefers-reduced-motion block collapses all of it. */
+  [data-nz-dialog] {
+    transition:
+      transform 180ms ease-in,
+      opacity 180ms ease-in;
+  }
+
+  [data-nz-dialog][data-open] {
+    transition:
+      transform 250ms ease-out,
+      opacity 250ms ease-out;
+    transform: none;
+    opacity: 1;
+  }
+
+  [data-nz-dialog-variant='drawer-right'] {
+    transform: translateX(100%);
+  }
+  [data-nz-dialog-variant='drawer-left'] {
+    transform: translateX(-100%);
+  }
+  [data-nz-dialog-variant='sheet'] {
+    transform: translateY(100%);
+  }
+  [data-nz-dialog-variant='center'] {
+    opacity: 0;
+  }
+  [data-nz-dialog-variant='center'][data-open] {
+    transform: translate(-50%, -50%);
+  }
+</style>
+
+<script>
+  import { createDialog, type DialogController } from '../../lib/ui/dialog';
+
+  // Astro bundles a component's script once per page no matter how many
+  // instances render, so this registry is built exactly once.
+  const registry = new Map<string, DialogController>();
+
+  for (const panel of document.querySelectorAll<HTMLElement>('[data-nz-dialog]')) {
+    const id = panel.dataset.nzDialog!;
+    const overlay = document.querySelector<HTMLElement>(`[data-nz-dialog-overlay="${id}"]`);
+    registry.set(
+      id,
+      createDialog(panel, {
+        overlay,
+        modal: panel.dataset.nzDialogModal !== 'false',
+      }),
+    );
+  }
+
+  function controllerFor(el: HTMLElement, attr: string): DialogController | undefined {
+    const id = el.getAttribute(attr);
+    return id ? registry.get(id) : undefined;
+  }
+
+  document.addEventListener('click', (event) => {
+    const target = event.target;
+    if (!(target instanceof HTMLElement)) return;
+
+    const closer = target.closest<HTMLElement>('[data-nz-dialog-close]');
+    if (closer) {
+      controllerFor(closer, 'data-nz-dialog-close')?.close();
+      return;
+    }
+
+    const toggler = target.closest<HTMLElement>('[data-nz-dialog-toggle]');
+    if (toggler) {
+      controllerFor(toggler, 'data-nz-dialog-toggle')?.toggle(toggler);
+      return;
+    }
+
+    const opener = target.closest<HTMLElement>('[data-nz-dialog-open]');
+    if (opener) {
+      controllerFor(opener, 'data-nz-dialog-open')?.open(opener);
+    }
+  });
+
+  declare global {
+    interface Window {
+      /** Programmatic access for components that open a dialog from code
+       *  rather than from a click, e.g. the fact-check claim confirmation. */
+      NZDialog: (id: string) => DialogController | undefined;
+    }
+  }
+  window.NZDialog = (id: string) => registry.get(id);
+</script>

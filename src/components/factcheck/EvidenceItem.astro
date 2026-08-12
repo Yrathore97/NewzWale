@@ -1,0 +1,153 @@
+---
+import type { Evidence } from '../../lib/factcheck/types';
+import { safeHref } from '../../lib/url';
+import SourceQualityChip from './SourceQualityChip.astro';
+
+/** One cited source.
+ *
+ *  CONTRADICTING EVIDENCE USES THE IDENTICAL TREATMENT AS SUPPORTING. No
+ *  demotion, no accordion, no "show more" (DESIGN_DIRECTION §6.3). The only
+ *  difference between the three stances is the colour of a 3px left border,
+ *  and the stance is also stated in words — the border is an accent, not the
+ *  carrier.
+ *
+ *  Borders, not shadows: a list of eight shadowed cards is noise, a list of
+ *  eight bordered ones is a document.
+ */
+interface Props {
+  evidence: Evidence;
+  index: number;
+  asTemplate?: boolean;
+  templateId?: string;
+}
+
+const BLANK: Evidence = { title: '', url: '', publisher: '' };
+
+const {
+  evidence = BLANK,
+  index = 1,
+  asTemplate = false,
+  templateId = 'evidence-item-template',
+} = Astro.props;
+
+const e = asTemplate ? BLANK : evidence;
+
+const STANCE_BORDER: Record<string, string> = {
+  supports: 'border-l-success',
+  contradicts: 'border-l-error',
+  neutral: 'border-l-mute',
+  unclear: 'border-l-stone',
+};
+
+const STANCE_LABEL: Record<string, string> = {
+  supports: 'Supports the claim',
+  contradicts: 'Contradicts the claim',
+  neutral: 'Context only',
+  unclear: 'Unclear',
+};
+
+const stance = e.stance ?? 'unclear';
+const href = asTemplate ? null : safeHref(e.url);
+
+function formatDate(value?: string | null): string | null {
+  if (!value) return null;
+  const t = Date.parse(value);
+  if (Number.isNaN(t)) return null;
+  return new Date(t).toLocaleDateString('en-IN', {
+    day: 'numeric',
+    month: 'short',
+    year: 'numeric',
+  });
+}
+
+const publishedLabel = asTemplate ? '' : (formatDate(e.publishedAt) ?? 'Date unknown');
+const accessedLabel = asTemplate ? '' : formatDate(e.accessedAt);
+
+const Wrapper = asTemplate ? 'template' : Fragment;
+const wrapperProps = asTemplate ? { id: templateId } : {};
+---
+
+<Wrapper {...wrapperProps}>
+  <li
+    data-evidence-item
+    data-stance={asTemplate ? undefined : stance}
+    class:list={[
+      'border-l-[3px] border-y-0 border-r-0 py-4 pl-4',
+      STANCE_BORDER[stance] ?? STANCE_BORDER.unclear,
+    ]}
+  >
+    <div class="flex flex-wrap items-center gap-x-2 gap-y-1">
+      <span data-ev-position class="font-mono text-sm font-bold text-mute">[{index}]</span>
+      <span data-ev-publisher class="text-sm font-semibold text-ink">{e.publisher}</span>
+      <span data-ev-tier><SourceQualityChip tier={e.tier} /></span>
+      {/* Stance in words, so the border colour is never the only signal. */}
+      <span
+        data-ev-stance
+        class="font-mono-caption rounded-full border border-hairline bg-surface-card px-2 py-0.5 text-mute"
+        >{STANCE_LABEL[stance] ?? STANCE_LABEL.unclear}</span
+      >
+    </div>
+
+    <p class="font-mono-caption mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-mute">
+      {/* Both dates, per principle 7: when it was published and when we read
+          it. An unknown publication date says so instead of borrowing the
+          access date. */}
+      <span data-ev-published>Published {publishedLabel}</span>
+      {accessedLabel && <span data-ev-accessed>· Accessed {accessedLabel}</span>}
+      <span data-ev-readmethod>
+        · {e.readMethod === 'full_page' ? 'Read in full' : 'Snippet only'}
+      </span>
+    </p>
+
+    <p data-ev-title class="mt-2 text-[15px] font-medium leading-snug text-ink">{e.title}</p>
+
+    {/* The exact text the verdict relied on, so a reader can check our
+        reading rather than take it on trust. */}
+    <blockquote
+      data-ev-quote-wrap
+      hidden={!e.quotedPassage && !asTemplate}
+      class="mt-2 border-l-2 border-hairline pl-3 text-sm italic leading-relaxed text-body"
+    >
+      <span data-ev-quote>{e.quotedPassage}</span>
+    </blockquote>
+
+    {/* Surfaced, never hidden: a reader is entitled to know that a source
+        tried to manipulate the assessment. */}
+    <p
+      data-ev-injection
+      hidden={!e.injectionFlagged && !asTemplate}
+      class="mt-2 text-xs font-semibold text-error"
+    >
+      ⚠ This page contained text attempting to influence the assessment. It was ignored.
+    </p>
+
+    <p
+      data-ev-irrelevant
+      hidden={e.relevant !== false && !asTemplate}
+      class="mt-2 text-xs text-mute"
+    >
+      Read, but it does not materially address the claim — it did not count toward
+      corroboration.
+    </p>
+
+    <p class="mt-2">
+      {
+        href ? (
+          <a
+            data-ev-link
+            href={href}
+            target="_blank"
+            rel="noopener noreferrer"
+            class="inline-flex min-h-11 items-center text-sm font-semibold text-primary-strong"
+          >
+            Open source ↗
+          </a>
+        ) : (
+          <span data-ev-link-withheld class="font-mono-caption text-mute">
+            Link withheld — the source URL did not pass validation
+          </span>
+        )
+      }
+    </p>
+  </li>
+</Wrapper>
