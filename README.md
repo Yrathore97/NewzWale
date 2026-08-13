@@ -21,7 +21,7 @@ Live Indian news, in 13 languages — plus a fact-checker that never guesses.
 NewzWale is two things, not seven:
 
 1. **A live headline feed** — real Indian news, pulled per category and language, always linking out to the original publisher. No rewritten copy, no invented summaries.
-2. **A fact-checker** — paste a headline, a claim, or an article URL. It checks a certified fact-checker database first, then live web evidence, and only ever answers `Verified`, `Misleading`, `False`, or **`Not enough evidence to judge`**. It does not guess.
+2. **A fact-checker** — paste a headline, a claim, or an article URL. It retrieves published fact-checks and live web evidence in parallel, and a deterministic gate — not the model — settles the verdict: `True`, `False`, `Partly true`, `Misleading`, `Needs context`, or **`Unverified`**. `True` and `False` require independent corroboration before they can be issued. It does not guess.
 
 Full write-up of what it does and how it was built: [`docs/WEBSITE-DOCUMENTATION.md`](docs/WEBSITE-DOCUMENTATION.md) ([PDF](docs/NewzWale-Documentation.pdf)).
 
@@ -30,9 +30,13 @@ Full write-up of what it does and how it was built: [`docs/WEBSITE-DOCUMENTATION
 | | |
 |---|---|
 | 📰 **Live headlines** | 8 categories, 13 languages, cached and RSS-backed for resilience |
-| ✅ **Fact Check Explorer** | 3-stage pipeline — certified lookup → web search → AI reasoning over real evidence only |
-| 🔖 **Save articles** | Bookmark any story, browse them in a slide-in drawer — no account needed |
+| ✅ **Fact Check Explorer** | Certified lookup and web evidence retrieved in parallel; a deterministic gate has the last word and can only downgrade what the model proposed |
+| 🕘 **Fact-check history** | Every check you run, kept on your device — capped at 50, filterable by verdict, never synced |
+| 🔍 **Search** | Full-text over indexed articles and fact-checks, with a `LIKE` fallback for scripts FTS5 tokenises poorly |
+| 📊 **Trending** | Ranked by how many independent outlets cover a story, not by clicks — the site collects no engagement data to rank on |
+| 🔖 **Save articles** | Bookmark any story, in a drawer or on the `/saved` page — no account needed |
 | 🎛️ **Customize topics** | Show or hide homepage sections to match what you read |
+| 📱 **Installable PWA** | Offline shell, explicit cache allowlist, shipped kill switch — `/api/*` and verdict pages are never served from cache |
 | 📈 **Live market ticker** | Sensex/Nifty — hides itself rather than ever showing a stale number |
 | 🌗 **Dark mode** | Full token-based theme, not a bolted-on toggle |
 | ♿ **Accessibility-tested** | WCAG contrast pairs enforced in CI, not just eyeballed |
@@ -45,14 +49,15 @@ Full write-up of what it does and how it was built: [`docs/WEBSITE-DOCUMENTATION
 | **Hosting** | [Cloudflare Workers](https://workers.cloudflare.com) |
 | **Styling** | [Tailwind CSS v4](https://tailwindcss.com), token-based design system |
 | **Cache** | Cloudflare KV |
+| **Database** | Cloudflare D1 — schema, migrations and repositories are written and tested; the binding is still commented out in `wrangler.jsonc` pending provisioning, so D1-backed routes return 503 rather than a fake empty feed |
 | **AI** | Workers AI (`llama-3.1-8b-instruct-fp8`) for grounded fact-check reasoning |
-| **News data** | [NewsData.io](https://newsdata.io), with an RSS fallback |
+| **News data** | [NewsData.io](https://newsdata.io) and [the Guardian](https://open-platform.theguardian.com), with an RSS fallback (The Hindu, Indian Express, NDTV, Mint) |
 | **Fact-check sources** | [Google Fact Check Tools](https://toolbox.google.com/factcheck/apis) + [Tavily Search](https://tavily.com) |
-| **Tests** | [Vitest](https://vitest.dev) — 131 tests, including an automated WCAG contrast check |
+| **Tests** | [Vitest](https://vitest.dev) — 1067 tests, including an automated WCAG contrast check and a drift test on the shipped security headers |
 
 ## Getting started
 
-**Requirements:** Node ≥ 22.12, a [Cloudflare account](https://dash.cloudflare.com/sign-up) for deployment.
+**Requirements:** Node ≥ 23.4 (`node:sqlite` is unflagged from 23.4, and the D1 schema tests run against it — on older Node those tests skip rather than fail, which is coverage you did not actually get). CI pins Node 24. A [Cloudflare account](https://dash.cloudflare.com/sign-up) is needed for deployment.
 
 ```bash
 git clone https://github.com/Yrathore97/NewzWale.git
@@ -70,6 +75,7 @@ cp .dev.vars.example .dev.vars
 NEWSDATA_API_KEY=          # newsdata.io
 GOOGLE_FACTCHECK_API_KEY=  # Google Fact Check Tools API
 TAVILY_API_KEY=            # tavily.com
+GUARDIAN_API_KEY=          # optional — open-platform.theguardian.com
 ```
 
 Then:
@@ -91,17 +97,28 @@ npm run dev       # local dev server → localhost:4321
 
 ## Deployment
 
-Deployed as a Cloudflare Worker via [`@astrojs/cloudflare`](https://docs.astro.build/en/guides/integrations-guide/cloudflare/). Bindings (KV cache, Workers AI, static assets) are declared in `wrangler.jsonc`; secrets are set with `wrangler secret put` and never committed. CI (`.github/workflows/deploy.yml`) runs tests, type-checks, and a full build on every push and PR to `main` — no bypassed gates.
+Deployed as a Cloudflare Worker via [`@astrojs/cloudflare`](https://docs.astro.build/en/guides/integrations-guide/cloudflare/). Bindings (KV cache, Workers AI, static assets) are declared in `wrangler.jsonc`; secrets are set with `wrangler secret put` and never committed. Security headers come from `src/middleware.ts` for SSR routes and `public/_headers` for prerendered ones — a test asserts the two stay identical.
+
+CI (`.github/workflows/deploy.yml`) runs `npm audit --audit-level=high`, tests, type-checks and a full build on every push and PR to `main` — no bypassed gates. **Despite the filename it does not deploy**; deployment is the manual `npm run deploy`.
 
 ## Project structure
 
 ```
 src/
-├── components/    # Astro components (Navbar, ArticleCard, FactCheckWidget, ...)
+├── components/    # Astro components, grouped: factcheck/ news/ shared/ shell/
 ├── layouts/       # Shared page shell
-├── lib/           # News fetching, fact-check pipeline, caching, rate limiting
-├── pages/         # Routes, incl. src/pages/api/* for news/factcheck/ticker
+├── lib/
+│   ├── db/        # D1 client, migrations, repositories
+│   ├── factcheck/ # Evidence engine: claim → retrieval → gate → verdict
+│   ├── news/      # Ingestion, canonicalisation, clustering, providers
+│   ├── security/  # CSP and security-header construction
+│   └── ...        # url, http, cache, ratelimit, saved, history
+├── middleware.ts  # Applies security headers to every SSR response
+├── pages/         # Routes; api/ (legacy) and api/v1/ (versioned envelope)
 └── styles/        # Tailwind v4 design tokens (global.css)
+public/
+├── sw.js          # Service worker: allowlist cache policy + kill switch
+└── _headers       # Security headers for prerendered routes
 tests/             # Vitest suite, mirrors src/lib structure
 docs/              # Full product & build documentation
 ```
@@ -111,6 +128,8 @@ docs/              # Full product & build documentation
 - [`docs/WEBSITE-DOCUMENTATION.md`](docs/WEBSITE-DOCUMENTATION.md) — full product overview, architecture, and build narrative
 - [`DESIGN.md`](DESIGN.md) — design system: tokens, color contract, dark mode, spacing
 - [`PROGRESS.md`](PROGRESS.md) — living build log and current gotchas
+- [`CLAUDE.md`](CLAUDE.md) — operating manual: protected paths, verification gates, scope and commit rules
+- [`docs/NEWZWALE_IMPLEMENTATION_PLAN.md`](docs/NEWZWALE_IMPLEMENTATION_PLAN.md) — the phase plan (P0–P10)
 
 ## License
 
