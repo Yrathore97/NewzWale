@@ -9,6 +9,82 @@ Full task list and rationale: `docs/superpowers/plans/2026-08-05-newzwale-rebuil
 
 ---
 
+## Status — D1 activated in production COMPLETE
+
+Built on the audit's fix (`67b8255`). Cloudflare D1 provisioned and wired
+for the first time — the last "PREPARED, NOT YET ACTIVE" gap in
+`wrangler.jsonc`, open since Phase 0.
+
+**1067 tests pass** (unchanged), `astro check` 0/0/0/0, production build
+PASS, `npm audit --audit-level=high` 0 vulnerabilities.
+
+### What changed
+
+- **D1 provisioned:** `wrangler d1 create newzwale` (region APAC), database
+  `6093befe-8889-4e28-bb1d-471d07d8c18d`, bound as `NEWZ_DB`. Confirmed empty
+  before migrating.
+- **Both migrations applied to the remote database**, not just local:
+  `0001_init.sql` and `0002_nullable_published_at.sql`. Verified against the
+  live schema, not just assumed: six-verdict `CHECK` rejects the retired
+  `'verified'` value and accepts all six current ones; `DELETE` and
+  substantive `UPDATE` on `fact_checks` both blocked by the append-only
+  triggers; `published_at` accepts `NULL`.
+- **`db:migrate:local`/`:remote` fixed** — previously applied only `0001`,
+  silently skipping `0002`. Now chains both. Both are independently
+  idempotent (confirmed by `tests/db/migration-0002.test.ts`), so this is
+  safe even against an already-migrated database.
+- **Fact-check persistence verified end-to-end** with a synthetic test
+  claim ("NASA confirmed a new comet named Halley-2..." — obviously
+  fictional, not real personal data, per the instruction to use synthetic
+  data): submit → parallel evidence retrieval → verdict → D1 insert →
+  public shareable `/fact-check/[id]` page → FTS search match. Confirmed the
+  persisted row stores `user_id: NULL`, `device_hash: NULL` — no IP, no
+  fingerprint, matching `/privacy`'s disclosure. **This synthetic row is
+  permanent** by design — `fact_checks` is append-only and the append-only
+  trigger was itself verified live by attempting (and having Cloudflare
+  reject) a `DELETE` on it.
+- **A real defect found during verification, fixed:** the first real
+  evidence ever rendered on `/fact-check/[id]` (an Instagram source) had a
+  quoted passage that was raw bundler JSON with no whitespace — no natural
+  break point — which forced the page wider than the viewport below
+  `1024px`. Fixed with `[overflow-wrap:anywhere]` on the shared evidence
+  blockquote (`EvidenceItem.astro`). Does **not** touch
+  `src/lib/factcheck/extract.ts` (protected, and a separate, larger
+  question about content quality on JS-rendered source pages — flagged
+  below, not fixed).
+- **An unrelated, freshly-disclosed dependency advisory caught by CI**
+  (`nanoid <3.3.18`, high severity, GHSA-2v37-7h3g-55p8) — disclosed after
+  the audit's last clean run, not introduced by this work. `nanoid` is a
+  transitive, build-time-only dependency of PostCSS (Tailwind's pipeline),
+  never bundled into the deployed Worker. `npm update nanoid` resolved it
+  in a 4-line lockfile diff.
+
+### D1-dependent routes: 503 → 200 (honestly empty, not fabricated)
+
+`/api/v1/trending`, `/api/v1/search`, `/api/v1/news` all now return `200`
+instead of `503 UPSTREAM_UNAVAILABLE`. Because **no ingestion job has ever
+run** (Cron is still commented out, still out of scope), the database has
+zero articles — so `/trending` and `/search` correctly render their
+documented empty states ("Not enough coverage yet to rank stories", "No
+indexed headlines match that search"), not an error and not fabricated
+content. `/news/[slug]` still 404s for any article id, because no articles
+exist yet to look up — also correct, not a regression.
+
+### Deployment
+
+`main`@`89a92df`, Worker version `9737a542-6c57-4594-8d52-6230e0644c72`.
+Deployed and verified live, including the header/console/overflow checks
+above, on the actual production domain.
+
+### Deliberately not done — Cron/ingestion is a separate task
+
+D1 being active does not mean the site has content yet. Populating
+`/trending`, `/search` and `/news` with real articles needs the Cron
+ingestion pipeline, which stays commented out in `wrangler.jsonc` — its
+schedule is explicitly documented as needing to be set only after measuring
+provider quota (143 category×language combinations against a free tier),
+and that measurement has not been done. Not attempted here; out of scope.
+
 ## Status — Full production health audit (post-P10) COMPLETE — one P1 fixed
 
 Built on the P10 merge (`944adeb`). Full end-to-end audit of every route, API,
