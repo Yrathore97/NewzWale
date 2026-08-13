@@ -9,6 +9,96 @@ Full task list and rationale: `docs/superpowers/plans/2026-08-05-newzwale-rebuil
 
 ---
 
+## Status — Full production health audit (post-P10) COMPLETE — one P1 fixed
+
+Built on the P10 merge (`944adeb`). Full end-to-end audit of every route, API,
+service integration, PWA behavior and security header against the live
+production deployment — not just source inspection. One real defect found and
+fixed; everything else audited came back healthy.
+
+**1067 tests pass** (unchanged — the fix is pure CSS with no behavioral
+assertions to add), `astro check` 0/0/0/0, production build PASS, `npm audit`
+0 vulnerabilities.
+
+### P1 bug found and fixed: BottomNav safe-area padding silently defeated
+
+`src/styles/global.css:168` declared `body { margin: 0; padding: 0; ... }`
+**outside any `@layer`**. Tailwind's utilities live in `@layer utilities`
+(loaded via `@import "tailwindcss"`), and per the CSS Cascade Layers spec an
+unlayered declaration beats a layered one regardless of specificity or source
+order. This unconditionally defeated `Layout.astro`'s
+`pb-[calc(3.5rem+env(safe-area-inset-bottom,0px))]` on `<body>`, on every
+route under `lg:` — meaning the last ~56-90px of every mobile page was
+trapped under the fixed `BottomNav` with no way to scroll to it. This is the
+exact failure the padding utility's own comment says it prevents, and it
+almost certainly dates to P6 (when that safe-area padding was introduced),
+not to anything in this session.
+
+**Verified live on production before the fix:** computed `padding-bottom` on
+`<body>` at 375px width was `0px`; at max scroll the footer's bottom sat
+56-90px below `BottomNav`'s top.
+
+**Fix:** removed the redundant, conflicting `margin`/`padding` from the
+unlayered rule. Tailwind Preflight (enabled by default) already zeroes
+`body`'s margin/padding inside its own `@layer base`, so deleting the
+duplicate lets the utility classes win as the cascade intends.
+`font-family`/`background-color`/`color`/`transition` untouched.
+
+**Verified live on production after the fix:** `padding-bottom: 56px` at
+375px in both themes, `0px` at 1280px (`lg:pb-0` — nav is `lg:hidden`, no
+clearance needed), footer clears `BottomNav` exactly at max scroll (footer
+bottom `755.6px` vs. nav top `755.2px`).
+
+Shipped as [PR #23](https://github.com/Yrathore97/NewzWale/pull/23) →
+`393873b`, deployed as Worker version `c29e1334-5e60-4c14-92e2-4ac8321a0715`.
+
+### Everything else audited — no other defects found
+
+- **All 19 page routes + 12 API routes** — every static/prerendered route
+  200s; dynamic routes (`/news/[slug]`, `/fact-check/[id]`,
+  `/api/v1/{news,search,trending}`) correctly 503/404 while D1 is
+  unprovisioned, never a fake empty success; `/verify` 301s to `/fact-check`.
+- **Fact-check pipeline, live, real claims:** a real claim ("RBI kept the
+  repo rate unchanged") returned `true` with 4 independently-sourced,
+  corroborating citations in ~15s; the identical claim repeated hit the 24h
+  KV cache and returned in 0.35s; a nonsense claim ("purple goats run the
+  Belgian postal service") correctly returned `unverified` with zero
+  fabricated evidence. No `id` returned on either — correct, since D1 being
+  unprovisioned means no shareable record is created.
+- **Search:** SQL-injection and wildcard-abuse payloads produce no anomalous
+  behavior (D1 unreachable in production to test the live path further;
+  safety is covered by 133 passing D1/repository tests including a dedicated
+  multilingual-search suite, run against real SQLite).
+- **Saved / history device-local storage, live:** save → unsave → poison
+  `localStorage` with wrong-shape JSON → app recovers cleanly to an empty
+  array, both for saved articles and for the rendered `/fact-check/history`
+  page (all six verdict counters correctly show 0, no crash).
+- **PWA, live:** service worker registered and active at scope `/`;
+  `/offline/` precached at `status: 200` (not a redirect); real navigations
+  populate the page cache correctly while plain `fetch()` calls correctly do
+  not (matches the `mode === 'navigate'` gate in `sw.js`); `KILL_SWITCH =
+  false` confirmed in the deployed file; manifest icons confirmed `purpose:
+  any`, never a false `maskable` claim.
+- **Security headers, live, all 11 prerendered routes:** full CSP/
+  Permissions-Policy/X-Frame-Options/X-Content-Type-Options/Referrer-Policy/
+  HSTS present on every one, both before and after the CSS fix deploy.
+- **CI/CD:** confirmed by reading the workflow, not assumed — push/PR to
+  `main` runs `npm audit --audit-level=high` → tests → `astro check` →
+  build; it does **not** deploy, matching every prior audit's finding.
+- **Cross-site DELETE to `/api/news` returns 403 from Cloudflare's own edge
+  CSRF protection** ("Cross-site DELETE form submissions are forbidden") —
+  not an application-level finding, noted so a future session doesn't
+  mistake it for one.
+
+### Not independently re-verifiable this session
+
+- **True network-kill offline testing.** No network-throttle API was
+  exposed by the available browser tooling. Re-confirmed via cache
+  inspection (`/offline/` precached, correct status) rather than an actual
+  live disconnect; the real disconnect test was performed and passed in the
+  P9 session (see that entry above) and nothing in this session's changes
+  touches `public/sw.js`.
+
 ## Status — P10 UNBLOCKED WORK COMPLETE — P10 AS A WHOLE IS NOT
 
 Built on P10.1b (`c1e8376`). Four items, four commits, no protected path
