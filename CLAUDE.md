@@ -413,12 +413,21 @@ rediscovered from scratch every session, not as a standing to-do list:
 - `.github/workflows/deploy.yml` runs audit/tests/check/build but does not
   deploy (audit item P-14, open). Deployment is the manual `npm run deploy`
   and needs `CLOUDFLARE_API_TOKEN`.
-- **D1 is provisioned and active** (database `newzwale`, binding `NEWZ_DB`),
-  but **empty — no ingestion job has ever run.** Cron is still commented out
-  in `wrangler.jsonc` and out of scope for every task so far. `/trending` and
-  `/search` correctly render their empty state, not an error, and
-  `/api/v1/{trending,search,news}` correctly return `200` with `[]`/`0`
-  rather than `503` now. Do not mistake "empty" for "broken."
+- **Cron ingestion is live and quota-sized.** `0 */2 * * *`, English only,
+  8 categories — one NewsData request per category, so 96/day against a
+  documented 200/day free tier. The remaining headroom is not spare: the
+  on-demand read path (`/api/news`, still serving the homepage) spends from
+  the SAME quota on a cache miss. **Do not raise the frequency or add
+  languages without re-measuring that shared spend** — adding a language
+  multiplies the cost by the number of languages, which is the trap Phase 2's
+  risk note names. Schedule lives in `wrangler.jsonc`; the tick's logic is
+  `src/lib/news/schedule.ts` (unit-tested), called from `scheduled()` in
+  `src/worker.ts`.
+- `wrangler.jsonc` `main` points at **`./src/worker.ts`**, not the adapter —
+  a cron trigger calls `scheduled()` on the default export and the adapter's
+  entrypoint exports only `fetch`. `src/worker.ts` spreads the adapter's
+  handler so the request path is unchanged. If you change `main` back, cron
+  silently stops working while the site keeps serving.
 - The implementation plan references a "P8 performance budget" for P10's
   performance-check gate; Phase 8's own section defines no such budget — it
   does not exist anywhere in the plan.

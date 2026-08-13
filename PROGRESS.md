@@ -9,6 +9,94 @@ Full task list and rationale: `docs/superpowers/plans/2026-08-05-newzwale-rebuil
 
 ---
 
+## Status — Cron ingestion live; /trending, /search, /news/[slug] now have real data
+
+Built on the D1 activation (`5be9d21`) and the fact-check banner fix
+(`1a142c4`). **1074 tests pass** (1067 + 7 new), `astro check` 0/0/0/0,
+build PASS.
+
+### The reported symptom, and what it actually was
+
+Reported: "trending fact check and search nothing is working." Three
+different causes, only one of which was a code defect:
+
+1. **Fact Check — a real bug** (`1a142c4`, PR #27). The error wrapper was a
+   `<p>` containing `<ErrorState>`, whose root is a block-level `<div>`. The
+   HTML parser auto-closes an open `<p>` before a block child, so the browser
+   hoisted the banner OUT of the wrapper and left it empty. `hidden` toggled
+   an empty `<p>` while the real banner stayed permanently visible — every
+   visitor to `/fact-check` saw "Couldn't check that claim" at all times,
+   *including next to a valid verdict*, which is what made a working checker
+   look broken. The API was never at fault (both `/api/factcheck` and
+   `/api/v1/factcheck` returned 200 with a correct verdict throughout).
+   The same bug silently killed the line-305 selector that swaps in a
+   specific API error message. Grepped for the same invalid nesting
+   elsewhere — this was the only instance.
+2. **Search and Trending — not broken, genuinely empty.** See below.
+3. (No third defect — `/news/[slug]` 404s had the same cause as 2.)
+
+### Why the feed was empty: `ingest()` had no caller
+
+D1 was provisioned and migrated last session, but **nothing ever wrote to
+it**. `ingest()` existed, was tested, and was called from nowhere. Activating
+the database was necessary but not sufficient — a fact the previous status
+entry understated.
+
+`src/lib/news/schedule.ts` (new) is that missing caller, invoked from a new
+`scheduled()` handler in `src/worker.ts`. `wrangler.jsonc` `main` now points
+at `./src/worker.ts` (a cron trigger calls `scheduled()` on the default
+export; the adapter's entrypoint exports only `fetch`) and the cron trigger
+is enabled.
+
+### The schedule is quota-sized, which is why it was never on by default
+
+One tick spends one NewsData request per category:
+
+```
+8 categories × 12 ticks/day = 96 NewsData requests/day
+```
+
+against a documented 200/day free tier. Deliberately ~half, because the
+on-demand read path (`/api/news`) spends from the **same** quota on a cache
+miss. **English only** for the same reason — adding a language multiplies the
+cost by the number of languages, exactly the trap Phase 2's risk note names.
+The other twelve languages remain served on-demand, as before.
+
+`runScheduledIngest` is contractually non-throwing: Cloudflare retries a cron
+invocation that rejects, and a retry would re-spend metered quota on the
+categories that already succeeded. Categories run sequentially, each
+independently guarded, and `failedProviders` is carried through so a degraded
+provider is visible in the log rather than hidden behind a healthy `ok: true`.
+
+### Verified against the real cron tick (20:00 UTC), not a simulation
+
+`wrangler dev --remote --test-scheduled` does **not** intercept
+`/__scheduled` — the request passes through to the app and 404s. And the
+provider keys exist only as Cloudflare secrets (no local `.dev.vars`), so
+ingestion cannot be run locally at all. The first real scheduled tick was
+therefore waited for and observed:
+
+- **143 articles**, **141 clusters** (2 with ≥2 independent sources)
+- `/api/v1/trending` → ranked multi-source stories, not `[]`
+- `/api/v1/search?q=india` → real headlines
+- `/trending` renders a ranked list; `/search` renders real results
+- `/news/[slug]` → **200** for a real slug (was 404 for every id)
+
+### Known, expected: trending is sparse at first
+
+Only 2 clusters currently clear the ≥2-independent-source floor, because
+clustering is deliberately conservative (Jaccard ≥0.75, under-merges on
+purpose — a missing "also reported by" beats claiming corroboration that does
+not exist). Breadth builds as successive ticks accumulate coverage. This is
+the designed behaviour, not a defect.
+
+### Deployment
+
+`main`@`6c1cd47`, Worker version `9bae4fdf-ae27-4569-a8c2-bbffe153b8b9`,
+`schedule: 0 */2 * * *` registered. Site verified healthy under the new
+entrypoint (`/`, `/news`, `/fact-check`, `/trending`, `/search`, `/about`,
+`/saved` all 200).
+
 ## Status — D1 activated in production COMPLETE
 
 Built on the audit's fix (`67b8255`). Cloudflare D1 provisioned and wired
