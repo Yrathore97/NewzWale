@@ -1,0 +1,34 @@
+# Security headers for PRERENDERED routes — audit finding S-11.
+#
+# src/middleware.ts applies securityHeaders() to every SSR response, but a page
+# with `prerender = true` is served straight from the Workers Assets binding and
+# never reaches middleware. Before this file, eleven routes therefore carried no
+# CSP, no Permissions-Policy, no X-Frame-Options and no HSTS at all:
+#
+#   /404  /500  /about  /contact  /fact-check/history  /methodology
+#   /offline  /privacy  /saved  /sitemap.xml  /terms
+#
+# The gap was known and recorded at src/middleware.ts:10-14 ("Covering them
+# needs a `public/_headers` entry at deploy time") — this is that entry. It got
+# wider with every phase that added a static page, which is exactly why it is
+# closed here rather than left as a standing note.
+#
+# THESE VALUES MUST MATCH src/lib/security/headers.ts EXACTLY.
+# tests/security/headers-file.test.ts parses this file and asserts equality
+# against securityHeaders({ reportOnly: true, reportUri: '/api/v1/csp-report',
+# https: true }). Drift fails the suite rather than silently weakening the
+# policy on precisely the pages nobody thinks to re-test.
+#
+# At build time @astrojs/cloudflare (`astro:build:done`) prepends its own
+# immutable Cache-Control rule for /_astro/* to the built copy of this file. It
+# reads this file first and skips that injection entirely if a matching rule
+# already sets Cache-Control, so nothing here is overwritten — and nothing here
+# may declare Cache-Control.
+
+/*
+  x-content-type-options: nosniff
+  referrer-policy: strict-origin-when-cross-origin
+  permissions-policy: geolocation=(), camera=(), microphone=(), payment=(), usb=(), magnetometer=(), gyroscope=(), accelerometer=(), interest-cohort=()
+  x-frame-options: DENY
+  content-security-policy-report-only: default-src 'self'; script-src 'self' 'unsafe-inline' https://www.googletagmanager.com; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data: https:; connect-src 'self' https://www.google-analytics.com; frame-ancestors 'none'; frame-src 'none'; object-src 'none'; base-uri 'self'; form-action 'self'; worker-src 'self'; upgrade-insecure-requests; report-uri /api/v1/csp-report
+  strict-transport-security: max-age=31536000; includeSubDomains
