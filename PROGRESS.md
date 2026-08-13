@@ -9,14 +9,38 @@ Full task list and rationale: `docs/superpowers/plans/2026-08-05-newzwale-rebuil
 
 ---
 
-## Status — Doc-Phase P6 (UI redesign) COMPLETE (uncommitted)
+## Status — Doc-Phase P8 (History & saved) COMPLETE — localStorage interpretation
+
+**Interpretation chosen:** device-local storage, per
+`NEWZWALE_IMPLEMENTATION_PLAN.md:486-487` ("Database: None if device-local
+(recommended). API: None if device-local"). **IndexedDB / `src/lib/store.ts`
+(the same plan's `:481,488`) was deliberately NOT implemented** — that line
+contradicts the "device-local recommended" line in the same section; the
+device-local reading was chosen and approved. Do not re-open without a new
+decision. P8's functional deliverables (saved page, device-local fact-check
+history capped at 50 with oldest-first eviction, verdict filters + counts,
+not-synced messaging, malformed-storage recovery, `window.NZ`) all shipped in
+P6 (`7c88d95`); there is no separate P8 commit.
+
+**Malformed-storage defect — FIXED.** The `window.NZ`
+saved/topics readers caught invalid JSON but not valid JSON of the wrong shape,
+so a poisoned `nz_saved = {"corrupted":true}` threw and silently disabled
+saving site-wide. The read/write helpers were extracted verbatim from
+`Layout.astro`'s inline block into `src/lib/saved.ts` (mirroring
+`factcheck-history.ts`, so the guards are unit-testable) and both readers now
+verify `Array.isArray` before returning. Keys, events, and the `window.NZ` API
+are unchanged. Browser-verified: from a poisoned state, saving recovers, the
+store becomes a valid array, and `/saved` no longer throws. Regression covered
+by `tests/saved.test.ts` (15 tests).
+
+## Status — Doc-Phase P6 (UI redesign) COMPLETE
 
 Built on P5 (`8f36570`). Frontend/UI only — no D1 schema, migration, API
 envelope, cursor-semantics, evidence-engine, verdict-semantics, or legacy-API
 change (all verified by an empty `git diff` over those paths).
 
-**1014 tests pass** (976 → 1014, +38; 0 removed/weakened/skipped), `astro
-check` 0/0/0 (186 files), production build PASS.
+**1029 tests pass** (976 → 1014 in P6, +15 in the P8 malformed-storage fix; 0
+removed/weakened/skipped), `astro check` 0/0/0, production build PASS.
 
 ### Delivered
 

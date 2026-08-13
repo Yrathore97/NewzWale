@@ -144,63 +144,16 @@ const canonicalURL = new URL(Astro.url.pathname, Astro.site || SITE);
     ></div>
 <script>
       // Shared save/topics state, backed by localStorage, shared across every
-      // component via window.NZ - each .astro <script> is its own module
-      // scope, so this is the one place the read/write logic lives.
-      const SAVE_KEY = 'nz_saved';
-      const TOPICS_KEY = 'nz_topics';
-      const DEFAULT_TOPICS = ['Sports', 'Business', 'Technology', 'Health'];
-
-      interface SavedArticle {
-        href: string;
-        headline: string;
-      }
-
-      function getSaved(): SavedArticle[] {
-        try {
-          return JSON.parse(localStorage.getItem(SAVE_KEY) || '[]');
-        } catch {
-          return [];
-        }
-      }
-
-      function setSaved(list: SavedArticle[]) {
-        localStorage.setItem(SAVE_KEY, JSON.stringify(list));
-        window.dispatchEvent(new CustomEvent('nz-saved-changed', { detail: { list } }));
-      }
-
-      function isSaved(href: string): boolean {
-        return getSaved().some((a) => a.href === href);
-      }
-
-      function toggleSaved(href: string, headline: string): boolean {
-        const list = getSaved();
-        const exists = list.some((a) => a.href === href);
-        const next = exists ? list.filter((a) => a.href !== href) : [...list, { href, headline }];
-        setSaved(next);
-        return !exists;
-      }
-
-      function getTopics(): string[] {
-        try {
-          const raw = localStorage.getItem(TOPICS_KEY);
-          return raw ? JSON.parse(raw) : DEFAULT_TOPICS.slice();
-        } catch {
-          return DEFAULT_TOPICS.slice();
-        }
-      }
-
-      function setTopics(list: string[]) {
-        localStorage.setItem(TOPICS_KEY, JSON.stringify(list));
-        window.dispatchEvent(new CustomEvent('nz-topics-changed', { detail: { list } }));
-      }
-
-      function toggleTopic(name: string): boolean {
-        const list = getTopics();
-        const has = list.includes(name);
-        const next = has ? list.filter((t) => t !== name) : [...list, name];
-        setTopics(next);
-        return !has;
-      }
+      // component via window.NZ. The read/write logic lives in src/lib/saved.ts
+      // (extracted from here so its malformed-storage guards are unit-tested);
+      // this block is the DOM wiring that binds it to window.NZ and the buttons.
+      import {
+        getSaved,
+        toggleSaved,
+        isSaved,
+        getTopics,
+        toggleTopic,
+      } from '../lib/saved';
 
       declare global {
         interface Window {
