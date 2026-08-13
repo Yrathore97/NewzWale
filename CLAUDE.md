@@ -69,6 +69,7 @@ Current verified status (re-verify before trusting, per §2):
 | P8 — History & saved (device-local) | COMPLETE |
 | P9 — PWA | COMPLETE |
 | P10.1 — About/Terms honesty fix | COMPLETE |
+| P10.1b — Privacy policy honesty/data-flow correction | COMPLETE |
 | P10 (overall) | **IN PROGRESS** — docs, analytics, deploy step, and more remain |
 
 Before starting any phase or sub-task:
@@ -330,8 +331,8 @@ don't assume the pre-commit verification still describes what's on disk.
 NewzWale's public documentation and UI copy must describe the product that
 actually ships — this has been violated before (`/about`, `/terms`, and
 `/privacy` all contained claims unsupported by source; `/about` and `/terms`
-were corrected in P10.1, `/privacy` is audited but not yet corrected as of
-this writing).
+were corrected in P10.1, `/privacy` was corrected in P10.1b
+(`c1e8376`)).
 
 Before changing or writing public-facing documentation, **grep every
 important factual claim against the source** — don't rely on the existing
@@ -400,9 +401,6 @@ These are documented findings from prior audits. Do not fix any of them
 without a specific authorization — they are listed here so they aren't
 rediscovered from scratch every session, not as a standing to-do list:
 
-- `src/pages/privacy.astro` contains claims unsupported by source (accounts,
-  Google OAuth, cross-device sync) — audited in the P10.1b pass; not yet
-  corrected.
 - `public/robots.txt` still disallows `/admin`, a route deleted in Phase 0
   (an unfinished **P1** item).
 - No `npm audit` step in CI (S-16, open).
@@ -428,11 +426,13 @@ rediscovered from scratch every session, not as a standing to-do list:
 
 ## 18. Current state
 
-As of this file's creation: P4–P9 complete and committed; P10.1 complete and
-committed; P10 overall **in progress** (see §17 for what remains). The
-P10.1b privacy audit has been performed (read-only) but `privacy.astro` has
-not been modified — it requires a mix of technical correction and product/
-legal decisions (see the audit findings for the split).
+As of this update: P4–P9 complete and committed; P10.1 complete and
+committed; P10.1b complete and committed (`c1e8376`) — the unsupported
+account/auth/OAuth/cross-device claims in `privacy.astro` were corrected,
+with legal-policy provisions (data-selling commitment, retention/access
+language, regulatory-compliance language) left untouched as decisions for
+the user or counsel, not technical corrections. P10 overall **in progress**
+(see §17 for what remains).
 
-Do not begin P10.1b implementation, P11, or any item in §17 without explicit
-authorization for that specific task.
+Do not begin P11 or any item in §17 without explicit authorization for that
+specific task.
