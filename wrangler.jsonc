@@ -3,7 +3,12 @@
 	"compatibility_date": "2026-08-04",
 	"compatibility_flags": ["global_fetch_strictly_public"],
 	"name": "newzwale",
-	"main": "@astrojs/cloudflare/entrypoints/server",
+	// Points at our own entry module, NOT the adapter directly: a cron trigger
+	// calls `scheduled()` on the default export, and the adapter's entrypoint
+	// exports only `fetch`. src/worker.ts re-exports the adapter's `fetch`
+	// unchanged and adds `scheduled` beside it, so the request path is
+	// byte-for-byte the same behaviour.
+	"main": "./src/worker.ts",
 	"assets": {
 		"directory": "./dist/client",
 		"binding": "ASSETS"
@@ -37,6 +42,25 @@
 
 	"observability": {
 		"enabled": true
+	},
+
+	// Cron — scheduled ingestion, off the read path.
+	//
+	// Without this, D1 stayed empty forever: `ingest()` had no caller, so
+	// /trending and /search rendered a correct-but-permanent empty state.
+	//
+	// SCHEDULE IS QUOTA-SIZED, not freshness-sized. One tick spends one
+	// NewsData request per category (see src/lib/news/schedule.ts):
+	//
+	//     8 categories x 12 ticks/day = 96 NewsData requests/day
+	//
+	// against a documented 200/day free tier — roughly half, deliberately,
+	// because the on-demand read path (/api/news, which still serves the
+	// homepage) spends from the SAME quota on a cache miss. Raising the
+	// frequency or widening to more languages without re-measuring that
+	// shared spend is how the feed goes dark mid-afternoon.
+	"triggers": {
+		"crons": ["0 */2 * * *"]
 	}
 
 	// ─────────────────────────────────────────────────────────────────────────
@@ -51,7 +75,7 @@
 	// Uncomment each block only in the phase that starts using it, after
 	// running the matching provisioning command and pasting the REAL id.
 	//
-	// (D1 was here — now active above, following this same pattern.)
+	// (D1 and Cron were here — both now active above, following this pattern.)
 	//
 	// ── Durable Object (Phase 1 — atomic rate limiting) ──────────────────────
 	// IMPLEMENTED in src/lib/durable/rate-limiter.ts and exported from
@@ -64,10 +88,8 @@
 	// That is why this can stay commented out without breaking anything.
 	//
 	// TO ENABLE (no account id needed — Durable Objects are provisioned by the
-	// deploy itself, unlike D1):
-	//   1. change "main" above to "./src/worker.ts"
-	//   2. uncomment the two blocks below
-	//   3. npx wrangler deploy
+	// deploy itself, unlike D1). `main` already points at ./src/worker.ts, so
+	// only these two blocks remain:
 	//
 	// "durable_objects": {
 	//   "bindings": [
@@ -77,15 +99,5 @@
 	// "migrations": [
 	//   { "tag": "v1", "new_sqlite_classes": ["RateLimiter"] }
 	// ],
-	//
-	// ── Cron (Phase 2 — scheduled ingestion off the read path) ───────────────
-	// Moves news ingestion out of the request path. Schedule is a PLACEHOLDER:
-	// the real interval must be set only AFTER measuring provider coverage and
-	// quota (11 categories x 13 languages = 143 combinations is far beyond any
-	// free tier). See NEWZWALE_IMPLEMENTATION_PLAN.md, Phase 2 risks.
-	//
-	// "triggers": {
-	//   "crons": ["*/10 * * * *"]
-	// }
 	// ─────────────────────────────────────────────────────────────────────────
 }
