@@ -36,6 +36,17 @@ jobs:
     - name: Install dependencies
       run: npm ci
 
+    # Dependency vulnerability gate (audit S-16). Deliberately placed BEFORE
+    # the build's `if:` guard so it also runs on Dependabot PRs — it needs no
+    # secret, and a dependency bump is exactly the change this should block.
+    #
+    # --audit-level=high fails on high and critical only. Moderate and below
+    # are reported without failing: Dependabot already proposes those updates,
+    # and a gate that cries wolf on every transitive moderate gets bypassed,
+    # which is worse than not having one.
+    - name: Audit dependencies
+      run: npm audit --audit-level=high
+
     - name: Run unit tests
       run: npm test
 
