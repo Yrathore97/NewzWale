@@ -12,6 +12,20 @@ declare module '*.sql?raw' {
   export default content;
 }
 
+/** Raw file import, handled by Vite. Used to load public/sw.js and
+ *  public/site.webmanifest into the PWA tests. The service worker is a classic
+ *  (non-module) script served verbatim from public/, so it cannot be imported
+ *  normally; the test evaluates the real file rather than a re-typed copy. */
+declare module '*.js?raw' {
+  const content: string;
+  export default content;
+}
+
+declare module '*.webmanifest?raw' {
+  const content: string;
+  export default content;
+}
+
 /** The subset of node:sqlite the migration test uses.
  *
  *  Unflagged from Node 23.4; needs --experimental-sqlite on Node 22. The test

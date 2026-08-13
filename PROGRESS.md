@@ -9,6 +9,105 @@ Full task list and rationale: `docs/superpowers/plans/2026-08-05-newzwale-rebuil
 
 ---
 
+## Status — Doc-Phase P9 (PWA) COMPLETE
+
+Built on P8 (`1b4e0c1`). Frontend/static-asset only — **zero diff** over
+`src/pages/api/`, `src/lib/factcheck/`, `src/lib/db/`, `src/lib/security/`,
+`wrangler.jsonc`, `package.json`, `package-lock.json`, `astro.config.mjs`.
+No new dependency, no new API route (the plan's §Phase 9 says "API: None").
+
+**1056 tests pass** (1029 → 1056, +27 in `tests/pwa/`; 0 removed/weakened/
+skipped), `astro check` 0/0/0/0, production build PASS.
+
+### Delivered
+
+- **Manifest** (`public/site.webmanifest`). Added `id`, `start_url`, `scope`,
+  `description`, `lang`, `dir`, `orientation`, and three `shortcuts`
+  (Fact Check / Trending / Saved — taken from the existing IA in
+  `BottomNav.astro`, not invented). Both icons moved from `purpose: maskable`
+  to `purpose: any`, which is the defect the plan names verbatim.
+- **Service worker** (`public/sw.js`, new). Classic script served verbatim from
+  `public/`; not bundled. `route()` is an explicit **allowlist** that returns
+  `bypass` for anything it does not positively recognise.
+  - `/api/*` — **never cached, in either direction.** Verified in-browser.
+  - `/fact-check` and `/fact-check/*` — network-only, falling back to the
+    offline page rather than to a stale verdict. `/fact-check/history` is the
+    single exception: a prerendered shell that reads the visitor's own
+    `localStorage`, so caching it exposes no server-rendered verdict.
+  - `/_astro/*`, `/fonts/*` and the enumerated icon/manifest files —
+    cache-first (content-addressed or immutable).
+  - Document navigations — network-first; the cache is a failure fallback, not
+    a source of truth. Page cache bounded at 40 entries, oldest-first.
+  - Second gate `canCache()` rejects non-200, redirected, opaque/cross-origin,
+    and `no-store`/`private` responses before anything is written.
+- **Offline fallback** (`src/pages/offline.astro`, new). Prerendered and
+  precached at install. Deliberately omits `MastheadInfoStrip`, which calls
+  `/api/v1/weather` and would render an error strip on the one page guaranteed
+  to be shown without a network. Uses only existing tokens — no new contrast
+  pairings.
+- **Registration + install prompt** (`Layout.astro`). Registration deferred to
+  `load`; a failed registration is swallowed, because the site works without
+  the worker. The install banner suppresses the browser mini-infobar, shows
+  **once** per device (`nz_install_prompted`, set on accept, dismiss, and
+  `appinstalled`), and sits above `BottomNav` rather than over it.
+- **Tests** (`tests/pwa/`, 27). `sw.test.ts` evaluates the **real**
+  `public/sw.js` via Vite `?raw` + `new Function` with a stubbed `self`, so the
+  policy under test is the policy that ships — no re-typed copy. Follows the
+  project's existing no-`@types/node` rule (`tests/types.d.ts`) rather than
+  adding a dependency.
+
+### Two plan ambiguities, resolved explicitly (not silently)
+
+1. **Kill-switch trigger.** §Rollback says "Unregister the service worker and
+   serve an empty `sw.js`", and §Phase 9 says "API: None" — which rules out a
+   remote-checked flag. Implemented as the `KILL_SWITCH` constant at
+   `public/sw.js:41`: flip to `true` and deploy, and the worker deletes every
+   cache, unregisters, reloads open clients, and **registers no `fetch`
+   handler at all**. The trigger is a deploy; there is nothing to poll.
+2. **Shortcut destinations.** Not specified by the plan. Used the existing
+   top-level routes only.
+
+### Kill switch — TESTED BEFORE SHIPPING, as §Rollback demands
+
+Not merely unit-tested. The flag was flipped to `true`, rebuilt, and run in a
+real browser against three seeded caches (`nz-pages-v1`, `nz-static-v1`,
+`nz-legacy-v0`): all three were deleted, the registration was removed, and
+`navigator.serviceWorker.controller` went `null`. Flipping it back and
+rebuilding restored normal registration and re-precached `/offline/`. Ships at
+`false`.
+
+### Browser-verified (wrangler dev, port 8787)
+
+- SW registers at scope `/`, reaches `activated`; caches `nz-static-v1` +
+  `nz-pages-v1` populate.
+- After visiting `/fact-check/` and calling `/api/v1/weather` + `/api/ticker`,
+  **nothing** under `/api` or `/fact-check` is in any cache.
+- Server stopped → `/saved/` serves from cache; `/trending` (never visited)
+  serves the offline page; `/fact-check/` serves the offline page, not a
+  verdict.
+- Install banner: hidden by default, `preventDefault()` on the event, shows
+  once, stays hidden on a second firing, and a double-click on Install calls
+  `prompt()` exactly once.
+- At 375×812 the banner occupies y 616–744 against a `BottomNav` starting at
+  755 — no overlap; both buttons 44px tall.
+
+### Known limitation (not a defect — deliberately not invented)
+
+There is still **no true maskable icon**. The existing artwork is a coral tile
+with its own baked-in rounded corners, so under a square Android mask those
+corners read as notches, and `public/` contains no safe-zone-padded variant.
+Declaring `maskable` without that artwork is exactly the bug the plan flagged,
+so the manifest now declares `any` only and Android applies its default
+treatment. Adding a real maskable variant needs new 192/512 artwork with the
+40% safe zone respected — a design task, not a code one. Pinned by
+`tests/pwa/manifest.test.ts`.
+
+### Note for whoever bumps the worker
+
+`VERSION` (`public/sw.js:38`) scopes both cache names. Bumping it is also a
+full cache flush — that is the intended lever, and `activate` deletes every
+cache not in `CURRENT_CACHES`.
+
 ## Status — Doc-Phase P8 (History & saved) COMPLETE — localStorage interpretation
 
 **Interpretation chosen:** device-local storage, per

@@ -227,7 +227,99 @@ const canonicalURL = new URL(Astro.url.pathname, Astro.site || SITE);
 
     <BottomNav />
 
+    <!-- P9 install prompt. Hidden until the browser fires
+         `beforeinstallprompt`, which it only does when the app is actually
+         installable, so this markup is inert on desktop Safari and on an
+         already-installed instance. Sits above the BottomNav rather than over
+         it, so it never covers a navigation target. -->
+    <div
+      id="nz-install"
+      hidden
+      role="region"
+      aria-label="Install NewzWale"
+      class="fixed inset-x-3 bottom-[calc(3.5rem+env(safe-area-inset-bottom,0px)+0.75rem)] z-[70] flex flex-col gap-3 rounded-md border border-hairline bg-surface-elevated p-4 shadow-stacked-md sm:inset-x-auto sm:right-4 sm:max-w-sm lg:bottom-4"
+    >
+      <p class="text-sm leading-snug text-ink">
+        Install NewzWale for a full-screen app and faster launches.
+      </p>
+      <div class="flex items-center gap-2">
+        <button type="button" id="nz-install-accept" class="btn-pill-primary min-h-11 px-5 text-sm">
+          Install
+        </button>
+        <button
+          type="button"
+          id="nz-install-dismiss"
+          class="min-h-11 cursor-pointer border-none bg-transparent px-3 text-sm font-medium text-mute hover:text-ink"
+        >
+          Not now
+        </button>
+      </div>
+    </div>
 
+    <script>
+      // P9: service-worker registration and the install prompt.
+      //
+      // public/sw.js is served verbatim from public/ and is a classic worker,
+      // so it is registered by path rather than imported. Registration is
+      // deferred to `load` so it never competes with the first paint.
+      if ('serviceWorker' in navigator) {
+        window.addEventListener('load', () => {
+          navigator.serviceWorker.register('/sw.js', { scope: '/' }).catch(() => {
+            // A failed registration is not a page error. The site works
+            // without the worker; that is the entire point of the design.
+          });
+        });
+      }
+
+      // The prompt is shown ONCE per device (§Phase 9 Tests: "install prompt
+      // appears once"). Both accepting and dismissing set the flag, because a
+      // banner that returns after being declined is the thing everybody hates.
+      const INSTALL_KEY = 'nz_install_prompted';
+      const panel = document.getElementById('nz-install');
+      const accept = document.getElementById('nz-install-accept');
+      const dismiss = document.getElementById('nz-install-dismiss');
+
+      let deferredPrompt: (Event & { prompt(): Promise<void> }) | null = null;
+
+      function markPrompted() {
+        try {
+          localStorage.setItem(INSTALL_KEY, '1');
+        } catch {
+          // Storage disabled or full. The banner just reappears next visit,
+          // which is a nuisance, not a failure worth throwing over.
+        }
+        if (panel) panel.hidden = true;
+      }
+
+      function alreadyPrompted(): boolean {
+        try {
+          return localStorage.getItem(INSTALL_KEY) === '1';
+        } catch {
+          return false;
+        }
+      }
+
+      window.addEventListener('beforeinstallprompt', (e) => {
+        // Suppress the browser's own mini-infobar so there is one prompt, not
+        // two competing ones.
+        e.preventDefault();
+        if (alreadyPrompted() || !panel) return;
+        deferredPrompt = e as Event & { prompt(): Promise<void> };
+        panel.hidden = false;
+      });
+
+      accept?.addEventListener('click', () => {
+        const prompt = deferredPrompt;
+        deferredPrompt = null;
+        markPrompted();
+        prompt?.prompt();
+      });
+
+      dismiss?.addEventListener('click', markPrompted);
+
+      // Installed by any route (the browser menu, a shortcut): stop offering.
+      window.addEventListener('appinstalled', markPrompted);
+    </script>
 
     <script>
       // Full-page navigations (category links, pagination, language switch)
