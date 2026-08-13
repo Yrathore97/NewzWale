@@ -70,7 +70,8 @@ Current verified status (re-verify before trusting, per §2):
 | P9 — PWA | COMPLETE |
 | P10.1 — About/Terms honesty fix | COMPLETE |
 | P10.1b — Privacy policy honesty/data-flow correction | COMPLETE |
-| P10 (overall) | **IN PROGRESS** — docs, analytics, deploy step, and more remain |
+| P10 — remaining *unblocked* work (S-11 headers, robots.txt, S-16 audit gate, doc sync) | COMPLETE |
+| P10 (overall) | **IN PROGRESS** — everything still open is blocked on credentials or a decision; see §17 |
 
 Before starting any phase or sub-task:
 
@@ -401,38 +402,63 @@ These are documented findings from prior audits. Do not fix any of them
 without a specific authorization — they are listed here so they aren't
 rediscovered from scratch every session, not as a standing to-do list:
 
-- `public/robots.txt` still disallows `/admin`, a route deleted in Phase 0
-  (an unfinished **P1** item).
-- No `npm audit` step in CI (S-16, open).
-- 11 prerendered routes (`404`, `500`, `about`, `contact`,
-  `fact-check/history`, `methodology`, `offline`, `privacy`, `saved`,
-  `sitemap.xml`, `terms`) bypass `src/middleware.ts` and receive no CSP or
-  security headers (S-11, partially open — documented at
-  `src/middleware.ts:10-14`). CSP itself is still Report-Only.
+- **CSP is still Report-Only** (S-11, partially open). The prerendered-route
+  half was closed in P10 by `public/_headers`; enforcing the policy still needs
+  build-time SHA-256 hashes for the six inline scripts. If you edit
+  `src/lib/security/headers.ts`, `tests/security/headers-file.test.ts` will
+  fail until `public/_headers` is updated to match — that is deliberate.
 - Google Analytics loads unconditionally with no consent gate (S-10, open).
-- `.github/workflows/deploy.yml` runs tests/check/build but does not deploy
-  (audit item P-14, open).
+  This also blocks the P10 analytics events: there is no consent mechanism for
+  them to respect.
+- `.github/workflows/deploy.yml` runs audit/tests/check/build but does not
+  deploy (audit item P-14, open). Deployment is the manual `npm run deploy`
+  and needs `CLOUDFLARE_API_TOKEN`.
+- D1 is unprovisioned — `wrangler.jsonc`'s `d1_databases` block is commented
+  out pending a real `database_id`.
 - `npm run db:migrate:local`/`:remote` only apply `0001_init.sql`;
   `0002_nullable_published_at.sql` is never run by the documented command —
   following the documented D1 setup as-is produces a schema the ingestion
-  code can't satisfy.
-- Retired four-verdict terminology (`verified`, `insufficient_evidence`)
-  still appears in `README.md` and `docs/WEBSITE-DOCUMENTATION.md`.
+  code can't satisfy. Fixing it means editing `package.json`, a protected
+  path.
 - The implementation plan references a "P8 performance budget" for P10's
   performance-check gate; Phase 8's own section defines no such budget — it
   does not exist anywhere in the plan.
-- `README.md` claims a live site is deployed; `PROGRESS.md` says the domain
-  (`newzwale.com`) is not yet owned — these contradict each other.
+- `src/layouts/Layout.astro:77` hardcodes `<meta name="robots" content="index,
+  follow">` with no per-page override, so `/offline`, `/saved` and
+  `/fact-check/history` advertise as indexable. They are absent from
+  `sitemap.xml`, so discovery is unlikely; a `noindex` prop would be the
+  honest fix.
+
+Closed in P10 (kept here only so they are not "rediscovered" as regressions):
+`public/robots.txt` `/admin` disallow, the missing `npm audit` CI gate, the
+prerendered-route security-header gap, retired four-verdict terminology in
+`README.md`/`docs/WEBSITE-DOCUMENTATION.md`, and the README-vs-PROGRESS domain
+contradiction (README was correct — the site is live at
+`https://www.newzwale.com`).
 
 ## 18. Current state
 
-As of this update: P4–P9 complete and committed; P10.1 complete and
-committed; P10.1b complete and committed (`c1e8376`) — the unsupported
-account/auth/OAuth/cross-device claims in `privacy.astro` were corrected,
-with legal-policy provisions (data-selling commitment, retention/access
-language, regulatory-compliance language) left untouched as decisions for
-the user or counsel, not technical corrections. P10 overall **in progress**
-(see §17 for what remains).
+As of this update: P4–P9 complete and committed. P10.1 (`8ed5759`) and P10.1b
+(`c1e8376`) corrected the unsupported product claims on `/about`, `/terms` and
+`/privacy`; the legal-policy provisions in those pages (data-selling
+commitment, retention/access language, regulatory-compliance language) were
+deliberately left untouched as decisions for the user or counsel, not
+technical corrections.
 
-Do not begin P11 or any item in §17 without explicit authorization for that
+**All P10 work that can be done without credentials or a pending decision is
+now complete** — prerendered-route security headers (S-11), the `robots.txt`
+`/admin` removal (P1), the `npm audit` CI gate (S-16), and the
+README/WEBSITE-DOCUMENTATION/AGENTS sync.
+
+P10 overall remains **in progress**. Everything still open is blocked on
+something outside the repository: Cloudflare credentials (deploy, D1
+provisioning), a product/legal decision (GA consent, and therefore the
+analytics events), a protected-path authorization (the `package.json`
+migration-script fix), or a missing definition (the performance budget).
+See §17.
+
+Nothing has been deployed. `npm run build` passes and the output is
+deployment-ready, but `npm run deploy` has never been run from here.
+
+Do not begin P11, or any item in §17, without explicit authorization for that
 specific task.

@@ -9,6 +9,87 @@ Full task list and rationale: `docs/superpowers/plans/2026-08-05-newzwale-rebuil
 
 ---
 
+## Status — P10 UNBLOCKED WORK COMPLETE — P10 AS A WHOLE IS NOT
+
+Built on P10.1b (`c1e8376`). Four items, four commits, no protected path
+touched by any of them. **1067 tests pass** (1056 → 1067, +11 new; 0 removed,
+weakened or skipped), `astro check` 0/0/0/0, production build PASS.
+
+### Delivered
+
+**S-11 — security headers for prerendered routes** (`f66b8c6`).
+`prerender = true` pages are served by the Workers Assets binding and never
+reach `src/middleware.ts`, so eleven routes shipped with no CSP, no
+Permissions-Policy, no `X-Frame-Options` and no HSTS. The gap was recorded at
+`src/middleware.ts:10-14` and widened with every phase that added a static
+page. New `public/_headers` closes it.
+
+Because the policy now lives in two places, `tests/security/headers-file.test.ts`
+parses the shipped `_headers` and asserts it equals `securityHeaders()`
+exactly — drift fails the suite instead of silently weakening the policy on the
+pages nobody re-tests. `src/lib/security/headers.ts` itself was **not** touched.
+
+Verified against `wrangler dev`: all eleven prerendered routes plus `/404` now
+carry the full set; SSR routes still get theirs from middleware; the adapter's
+immutable `/_astro/*` Cache-Control injection still happens (it *prepends* to
+our file and skips injection entirely if we declared Cache-Control, which is
+why `_headers` must not).
+
+**P1 — robots.txt** (`42135c0`). Dropped `Disallow: /admin`, a route deleted in
+Phase 0 with the auth it guarded. Verified before removing: zero `/admin`
+references in `src/`, route returns 404. `Disallow: /api/` kept — those exist.
+
+**S-16 — npm audit CI gate** (`91cfca4`). Added
+`npm audit --audit-level=high`, exactly the remediation the security audit
+prescribes, placed **before** the build's Dependabot `if:` guard so it also
+gates dependency-bump PRs (it needs no secret). `npm audit` currently reports
+**0 vulnerabilities**, so no dependency version was changed to make it pass.
+
+**Documentation sync** (`9ba7822`). `README.md`,
+`docs/WEBSITE-DOCUMENTATION.md`, `AGENTS.md`. Retired four-verdict terminology
+removed everywhere; six verdicts, parallel retrieval and the deterministic gate
+described as they actually work. Test count 131 → 1067. Node ≥ 22.12 → ≥ 23.4.
+`GUARDIAN_API_KEY` added to the env template. D1 documented *with* its
+unprovisioned status rather than implied working. PWA, `/search`, `/trending`,
+`/fact-check/history`, `/saved` and `public/_headers` documented for the first
+time. `AGENTS.md` no longer points at `astro dev --background`, which is not a
+real command.
+
+### Corrected a long-standing contradiction
+
+`README.md` claimed a live site; this file's "Deferred" section said the domain
+was not owned. **README was right.** `https://www.newzwale.com` returns 200 and
+`docs/WEBSITE-DOCUMENTATION.md` §6 independently records the domain as bound to
+the Worker via the Cloudflare dashboard. The stale line below is struck through
+rather than deleted, so the correction is visible.
+
+### Deployment — BLOCKED, not done
+
+`npm run build` passes and the output is deployment-ready. `npm run deploy`
+(`astro build && wrangler deploy`) was **not run**: it needs Cloudflare
+credentials that are not present in this environment, and `CLAUDE.md` §16
+forbids fabricating them. Nothing was deployed; the live site is unchanged by
+this work.
+
+### Still blocked / deferred (unchanged by this pass)
+
+- Cloudflare deploy — needs `CLOUDFLARE_API_TOKEN`.
+- D1 provisioning — needs `wrangler d1 create newzwale` and the real
+  `database_id`.
+- `db:migrate:local`/`:remote` apply only `0001_init.sql`; `0002` never runs.
+  Fixing it means editing `package.json`, a protected path — needs
+  authorization.
+- Analytics events — depend on the unresolved GA consent decision (S-10).
+- Performance budget — the plan references a "P8 budget" that does not exist.
+
+### Unrelated finding, not acted on
+
+`src/layouts/Layout.astro:77` hardcodes `<meta name="robots" content="index,
+follow">` with no per-page override, so `/offline`, `/saved` and
+`/fact-check/history` advertise as indexable. They are absent from
+`sitemap.xml`, so discovery is unlikely, but a `noindex` prop would be the
+honest fix. Out of scope for the authorized items; not changed.
+
 ## Status — P10.1b (Privacy policy honesty/data-flow correction) COMPLETE — P10 AS A WHOLE IS NOT
 
 Built on the CLAUDE.md commit (`5f445cb`). Copy-only, one prerendered page.
@@ -994,7 +1075,12 @@ so it does not get re-litigated.
 
 ## Deferred / not built
 
-- Custom domain (`newzwale.com` not yet owned).
+- ~~Custom domain (`newzwale.com` not yet owned).~~ **Stale — corrected in P10.**
+  `https://www.newzwale.com` returns 200; the domain is bound to the Worker via
+  the Cloudflare dashboard, not declared in `wrangler.jsonc`
+  (`docs/WEBSITE-DOCUMENTATION.md` §6 records the same). Still worth doing:
+  a canonical redirect, since apex and `www` both resolve 200 with no redirect
+  between them.
 - Image/screenshot OCR tab — UI exists, disabled with "coming soon"; no backend wiring.
 - `DECISIONS.md` still needs its rewrite or deletion (see gotchas).
 - Site UI translation. The language selector now fetches news content in the
