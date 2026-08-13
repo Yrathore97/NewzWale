@@ -106,8 +106,16 @@ const wrapperProps = asTemplate ? { id: templateId } : {};
     <blockquote
       data-ev-quote-wrap
       hidden={!e.quotedPassage && !asTemplate}
-      class="mt-2 border-l-2 border-hairline pl-3 text-sm italic leading-relaxed text-body"
+      class="mt-2 border-l-2 border-hairline pl-3 text-sm italic leading-relaxed text-body [overflow-wrap:anywhere]"
     >
+      {/* [overflow-wrap:anywhere]: found live in production after D1
+          activation — a JS-heavy page (e.g. an Instagram URL) can yield a
+          quoted passage with no natural break points (raw bundler JSON, no
+          whitespace), which forced this blockquote, and the page, wider than
+          the viewport. This does not fix WHAT gets extracted from such
+          pages (src/lib/factcheck/extract.ts is out of this fix's scope);
+          it guarantees that whatever text lands here can never break layout,
+          regardless of its source. */}
       <span data-ev-quote>{e.quotedPassage}</span>
     </blockquote>
 
