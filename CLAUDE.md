@@ -413,13 +413,12 @@ rediscovered from scratch every session, not as a standing to-do list:
 - `.github/workflows/deploy.yml` runs audit/tests/check/build but does not
   deploy (audit item P-14, open). Deployment is the manual `npm run deploy`
   and needs `CLOUDFLARE_API_TOKEN`.
-- D1 is unprovisioned — `wrangler.jsonc`'s `d1_databases` block is commented
-  out pending a real `database_id`.
-- `npm run db:migrate:local`/`:remote` only apply `0001_init.sql`;
-  `0002_nullable_published_at.sql` is never run by the documented command —
-  following the documented D1 setup as-is produces a schema the ingestion
-  code can't satisfy. Fixing it means editing `package.json`, a protected
-  path.
+- **D1 is provisioned and active** (database `newzwale`, binding `NEWZ_DB`),
+  but **empty — no ingestion job has ever run.** Cron is still commented out
+  in `wrangler.jsonc` and out of scope for every task so far. `/trending` and
+  `/search` correctly render their empty state, not an error, and
+  `/api/v1/{trending,search,news}` correctly return `200` with `[]`/`0`
+  rather than `503` now. Do not mistake "empty" for "broken."
 - The implementation plan references a "P8 performance budget" for P10's
   performance-check gate; Phase 8's own section defines no such budget — it
   does not exist anywhere in the plan.
@@ -435,6 +434,14 @@ prerendered-route security-header gap, retired four-verdict terminology in
 `README.md`/`docs/WEBSITE-DOCUMENTATION.md`, and the README-vs-PROGRESS domain
 contradiction (README was correct — the site is live at
 `https://www.newzwale.com`).
+
+Closed after the full production audit: an unlayered `body{}` rule in
+`global.css` was silently defeating `BottomNav`'s safe-area padding on every
+mobile route (PR #23); D1 provisioning and the `0002` migration gap (PR #25);
+a fact-check evidence blockquote with no word-break protection could overflow
+the page when a source's extracted text had no natural break points (PR #25);
+a freshly-disclosed high-severity `nanoid` advisory in the Tailwind/PostCSS
+build toolchain, unrelated to any of this work (PR #25).
 
 ## 18. Current state
 
