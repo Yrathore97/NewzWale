@@ -9,6 +9,93 @@ Full task list and rationale: `docs/superpowers/plans/2026-08-05-newzwale-rebuil
 
 ---
 
+## Status — P10.1b (Privacy policy honesty/data-flow correction) COMPLETE — P10 AS A WHOLE IS NOT
+
+Built on the CLAUDE.md commit (`5f445cb`). Copy-only, one prerendered page.
+**Zero diff** over every protected path listed in `CLAUDE.md` §4. No new
+dependency, no new token, no new contrast pairing.
+
+**1056 tests pass** (unchanged — no logic added), `astro check` 0/0/0/0,
+production build PASS.
+
+### Unsupported claims removed
+
+`src/pages/privacy.astro` described a product with accounts. Verified by grep,
+not assumed:
+
+| Claim | Reality |
+|---|---|
+| "account credentials (name and email when you sign up)" | No signup, no auth anywhere in `src/`; deleted in Phase 0 |
+| "authenticating your account" | Same |
+| "Google for authentication (OAuth)" | No OAuth flow, library or callback route exists |
+| "delivering your saved bookmarks **across devices**" | `src/lib/saved.ts` is `localStorage`-only; directly contradicted `/saved`'s own copy |
+| "delete… from your account settings" | No account-settings route exists |
+| "retain account data for as long as your account remains active" | No accounts to retain data for |
+| "…local storage to remember your theme, language preference, **and authentication session**" | No auth session to store |
+| "Minimal cookies may be used" | No `document.cookie`/`Set-Cookie` anywhere in `src/` |
+| "communicated… via our news feed" | No feed-announcement mechanism exists |
+
+### localStorage keys verified against source
+
+The policy now enumerates only keys that actually exist: `theme`,
+`userLanguage` + `userLanguageName` (`Navbar.astro:296-297`), `nz_saved` and
+`nz_topics` (`saved.ts:23-24`), `nz_factcheck_history`
+(`factcheck-history.ts:17`), `nz_install_prompted` (`Layout.astro:277`).
+Sync is stated as absent, matching the device-local P8 interpretation.
+
+### Honest disclosures added (each source-backed)
+
+- **Cookies:** NewzWale sets none of its own; Google Analytics sets its own.
+- **Analytics consent — limitation disclosed, not invented.** GA loads on
+  every page and there is no in-product consent control (S-10, still open).
+  The policy says so plainly and points at browser-level blocking, rather
+  than describing a consent mechanism that does not exist.
+- **IP / rate limiting:** `ratelimit.ts:79` reads `cf-connecting-ip`.
+- **Weather location:** city-level approximation from `request.cf`, used
+  server-side only and never passed to a third party
+  (`api/v1/weather.ts:27`); precise geolocation stays disabled via
+  `permissions-policy: geolocation=()`.
+- **Third-party fact-check processing:** a submitted claim reaches Google
+  Fact Check Tools (`google.ts:4`), Tavily (`search.ts:31`) and Cloudflare
+  Workers AI (`version.ts:84`).
+- **Caching:** 24 h, per `CACHE_TTL` (`factcheck/route.ts:30`).
+- **Fact-check persistence / public record:** `persistFactCheck` writes the
+  claim text to D1 and `/fact-check/[id]` renders it publicly. Worded as
+  "where the public fact-check archive is enabled" — accurate today (D1 is
+  unprovisioned, so nothing persists) and still accurate once it is
+  provisioned, so the policy does not go stale on that switch.
+- **Explicit user warning added:** do not submit personal, confidential or
+  identifying information as a fact-check claim.
+
+### Browser QA (wrangler dev, port 8787)
+
+`/privacy` at **375×812** and **1280×900**: no horizontal overflow at either
+width. 10 sections render. All nine retired phrases absent from rendered
+text; the new disclosures present. Light and dark both render with existing
+tokens only. All seven footer internal links resolve 200.
+
+**Not verified:** no screenshots (the browser pane was not compositing, so
+frame capture and coordinate clicks were unavailable) — rendered-text
+extraction and computed-geometry checks were used instead. No screen-reader
+pass (no AT available in this environment).
+
+### NOT independently verified — legal/policy questions still open
+
+These were left alone because code cannot confirm or deny them, and this pass
+made no attempt to validate them: the data-selling commitment (the old
+"we never sell your personal data" sentence went with its section and was
+**not** re-asserted — restoring it as an explicit promise is a decision for
+you), "access restricted to authorized personnel", the regulatory-compliance
+language, and "our editorial and data-protection team" in Contact Us (implies
+a formal DPO structure). Treat all of these as unreviewed.
+
+### Correction to an earlier audit note
+
+The P10.1b discovery pass recorded that the language preference "is a query
+param, not stored". **That was wrong** — `Navbar.astro:296-297` writes
+`userLanguage`/`userLanguageName` to `localStorage`. Caught before writing;
+the policy lists it among device-local data.
+
 ## Status — P10.1 (About/Terms honesty fix) COMPLETE — P10 AS A WHOLE IS NOT
 
 Built on P9 (`6d378cd`). Copy-only, two prerendered pages. **Zero diff** over
@@ -116,7 +203,8 @@ is no signup, no auth, no server-side storage, and no cross-device sync. The
 cross-device claim directly contradicts `/saved`'s own on-page copy. A privacy
 policy is a representation to users and regulators, so this is the highest-
 severity copy defect remaining. It was **not** touched — `privacy.astro` was
-outside the authorized P10.1 scope.
+outside the authorized P10.1 scope. **Addressed subsequently in P10.1b** (see
+the section above).
 
 ## Status — Doc-Phase P9 (PWA) COMPLETE
 
