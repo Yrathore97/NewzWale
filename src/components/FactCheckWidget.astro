@@ -44,13 +44,20 @@ import ErrorState from './shared/ErrorState.astro';
       <ClaimConfirm />
       <CheckProgress />
 
-      <p id="factcheck-error-wrap" hidden>
+      {/* MUST be a <div>, not a <p>. ErrorState's root is a block-level
+          <div>, and the HTML parser auto-closes an open <p> before a block
+          child - so as a <p> this wrapper was left EMPTY and the error markup
+          was hoisted out as a sibling. `hidden` then toggled an empty
+          element while the real banner stayed permanently visible: every
+          visitor to /fact-check saw "Couldn't check that claim" at all times,
+          including alongside a successful verdict. Found in production. */}
+      <div id="factcheck-error-wrap" hidden>
         <ErrorState
           title="Couldn't check that claim"
           description="The verification service did not return a result. Your claim has not been lost — try again."
           retryTarget="factcheck"
         />
-      </p>
+      </div>
 
       <!-- Result. aria-live so a screen-reader user hears the verdict land
            without having to go looking for it (UI/UX spec §7 "new"). -->
