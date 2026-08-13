@@ -165,12 +165,22 @@ html.dark {
   --color-verdict-context: #8ab4f8;
 }
 
+/* AUDIT FIX: `margin`/`padding` removed. This rule is unlayered (Tailwind's
+ * utilities live in `@layer utilities`), and per the CSS Cascade Layers spec
+ * ANY unlayered declaration beats ANY layered one regardless of specificity.
+ * `padding: 0` here was unconditionally overriding the safe-area bottom
+ * padding Layout.astro's <body> applies to clear the fixed BottomNav
+ * (`pb-[calc(3.5rem+env(safe-area-inset-bottom,0px))]`), so on every route
+ * under `lg:` the last ~56-90px of page content was permanently hidden
+ * beneath BottomNav with no way to scroll to it - exactly the failure the
+ * padding utility's own comment says it prevents. Tailwind Preflight (loaded
+ * via `@import "tailwindcss"`, not disabled) already zeroes body's margin and
+ * padding inside its own `@layer base`, so removing the unlayered duplicate
+ * is enough to let the utility classes win as the cascade intends. */
 body {
   font-family: var(--font-sans);
   background-color: var(--color-surface-soft);
   color: var(--color-ink);
-  margin: 0;
-  padding: 0;
   -webkit-font-smoothing: antialiased;
   transition: background-color 0.2s ease, color 0.2s ease;
 }
