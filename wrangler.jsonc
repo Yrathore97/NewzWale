@@ -16,6 +16,16 @@
 	],
 	"ai": { "binding": "AI" },
 
+	// D1 — provisioned via `wrangler d1 create newzwale`. Migrations applied:
+	// 0001_init.sql, 0002_nullable_published_at.sql. See src/lib/db/migrations/.
+	"d1_databases": [
+		{
+			"binding": "NEWZ_DB",
+			"database_name": "newzwale",
+			"database_id": "6093befe-8889-4e28-bb1d-471d07d8c18d"
+		}
+	],
+
 	// The IMAGES binding is deliberately NOT declared here.
 	//
 	// @astrojs/cloudflare resolves `imageService` to 'cloudflare-binding' by
@@ -32,28 +42,16 @@
 	// ─────────────────────────────────────────────────────────────────────────
 	// TARGET ARCHITECTURE — PREPARED, NOT YET ACTIVE
 	//
-	// The blocks below are the approved Phase 2+ bindings. They are commented
-	// out ON PURPOSE: each needs a real resource id that must be created
-	// against the Cloudflare account at deploy time. Inventing placeholder ids
-	// would produce a config that looks valid and fails at deploy, which is
-	// worse than an obviously absent one.
+	// The blocks below are the approved Phase 2+ bindings not yet in the active
+	// config above. They are commented out ON PURPOSE: each needs a real
+	// resource id that must be created against the Cloudflare account at
+	// deploy time. Inventing placeholder ids would produce a config that looks
+	// valid and fails at deploy, which is worse than an obviously absent one.
 	//
 	// Uncomment each block only in the phase that starts using it, after
 	// running the matching provisioning command and pasting the REAL id.
 	//
-	// ── D1 (Phase 2 — system of record) ──────────────────────────────────────
-	// Provision:  npx wrangler d1 create newzwale
-	// Migrate:    npx wrangler d1 execute newzwale --remote \
-	//               --file=src/lib/db/migrations/0001_init.sql
-	// Schema already written: src/lib/db/migrations/0001_init.sql
-	//
-	// "d1_databases": [
-	//   {
-	//     "binding": "NEWZ_DB",
-	//     "database_name": "newzwale",
-	//     "database_id": "<DEPLOYMENT-TIME: output of `wrangler d1 create`>"
-	//   }
-	// ],
+	// (D1 was here — now active above, following this same pattern.)
 	//
 	// ── Durable Object (Phase 1 — atomic rate limiting) ──────────────────────
 	// IMPLEMENTED in src/lib/durable/rate-limiter.ts and exported from
