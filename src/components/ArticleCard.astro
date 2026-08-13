@@ -1,107 +1,249 @@
 ---
 import type { Article } from '../lib/news/types';
 import { formatPublished } from '../lib/news/feed';
+import { safeHref } from '../lib/url';
 
+/** One card, one story — and ONE implementation.
+ *
+ *  NewsFeed.astro used to carry a hand-written `buildCard()` that rebuilt this
+ *  markup in JavaScript for the "Load more" path, so a server-rendered card and
+ *  an appended card were two separate designs that drifted apart
+ *  (NEWZWALE_UI_UX_SPEC §2 "Delete"). That function is gone. Passing
+ *  `asTemplate` renders this exact markup, with the text nodes left empty,
+ *  inside a <template> the client clones and fills. Both paths now come from
+ *  the file you are reading.
+ *
+ *  Every value the client substitutes is marked with a `data-field`, `data-*`
+ *  hook below. Nothing is filled with innerHTML — see the NewsFeed script.
+ *
+ *  P6 changes over the previous card:
+ *   - `rounded-sm` (8px), not `rounded-md` — tight corners read editorial,
+ *     large radii read app-like (DESIGN_DIRECTION §4).
+ *   - Category badge moved OUT of the image and into the meta row. Over the
+ *     image it was sighted-only and it covered the top-left of the photo
+ *     (audit A-06).
+ *   - Save control is a 44x44 target with a real accessible name and
+ *     aria-pressed, instead of a 20px-tall pill labelled only "Save".
+ *   - The image box is reserved with `aspect-ratio` as well as width/height,
+ *     so the row height is known before the image loads (CLS).
+ */
 interface Props {
-  article: Article;
-  /** 'lead' renders a taller image and larger headline for the hero slot. */
-  size?: 'default' | 'lead';
+  /** Required in normal mode. Omitted in template mode, where there is no
+   *  article yet — the client supplies the values. */
+  article?: Article;
+  /** `lead` is the hero slot; `compact` is an imageless list row used by
+   *  search results and trending. */
+  size?: 'default' | 'lead' | 'compact';
+  /** Renders an empty clone-able version of this card. `article` is ignored. */
+  asTemplate?: boolean;
+  /** DOM id for the <template>. Only meaningful with asTemplate. */
+  templateId?: string;
 }
 
-const { article, size = 'default' } = Astro.props;
-const isLead = size === 'lead';
+const BLANK: Article = {
+  id: '',
+  title: '',
+  url: '',
+  summary: '',
+  imageUrl: null,
+  source: '',
+  category: '',
+  publishedAt: '',
+};
 
-const imageHeight = isLead ? 'h-72 sm:h-96' : 'h-44';
+const {
+  article = BLANK,
+  size = 'default',
+  asTemplate = false,
+  templateId = 'article-card-template',
+} = Astro.props;
+
+const isLead = size === 'lead';
+const isCompact = size === 'compact';
+
+// In template mode every text node ships empty and every URL is omitted: a
+// template must never contain a real link that could be followed or indexed.
+const title = asTemplate ? '' : article.title;
+const summary = asTemplate ? '' : article.summary;
+const source = asTemplate ? '' : article.source;
+const category = asTemplate ? '' : article.category;
+const published = asTemplate ? '' : formatPublished(article.publishedAt);
+const href = asTemplate ? null : safeHref(article.url);
+const imageUrl = asTemplate ? null : article.imageUrl && safeHref(article.imageUrl);
+
+// A card whose link is unsafe is not rendered as a link. It is still rendered,
+// because dropping it silently would look like the feed lost a story.
+const Tag = href ? 'a' : 'span';
+
+// `Fragment` is an Astro built-in, so template mode wraps this component's
+// single markup block instead of duplicating it.
+const Wrapper = asTemplate ? 'template' : Fragment;
+const wrapperProps = asTemplate ? { id: templateId } : {};
+
 const headlineSize = isLead
   ? 'text-xl sm:text-2xl lg:text-3xl tracking-[-0.6px]'
-  : 'text-base tracking-[-0.3px]';
-const summaryClamp = isLead ? 'line-clamp-3 text-sm' : 'line-clamp-3 text-xs';
+  : isCompact
+    ? 'text-[15px] tracking-[-0.2px]'
+    : 'text-[17px] tracking-[-0.3px]';
 ---
 
+<Wrapper {...wrapperProps}>
 <article
-  data-article-id={article.id}
-  class="article-card bg-surface-elevated border border-hairline rounded-md overflow-hidden shadow-stacked-sm hover:shadow-stacked-md hover:border-primary transition-[box-shadow,border-color] flex flex-col group h-full"
+  data-article-id={asTemplate ? undefined : article.id}
+  data-article-card
+  class:list={[
+    'article-card group flex h-full flex-col overflow-hidden border border-hairline bg-surface-elevated transition-[box-shadow,border-color] hover:border-primary hover:shadow-stacked-sm',
+    isCompact ? 'rounded-sm' : 'rounded-sm',
+  ]}
 >
-  {article.imageUrl && (
-    <div class={`relative ${imageHeight} w-full overflow-hidden bg-surface-card`}>
-      <img
-        src={article.imageUrl}
-        alt=""
-        width={isLead ? 900 : 400}
-        height={isLead ? 384 : 176}
-        class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-        loading={isLead ? 'eager' : 'lazy'}
-      />
-      <div class="absolute top-3 left-3 bg-surface-elevated/90 backdrop-blur-md px-2.5 py-0.5 rounded-full text-[11px] font-semibold capitalize text-ink border border-hairline flex items-center gap-1.5 shadow-stacked-sm">
-        <span class="w-1.5 h-1.5 rounded-full bg-primary"></span>
-        {article.category}
-      </div>
-      <button
-        type="button"
-        data-save-href={article.url}
-        data-save-headline={article.title}
-        aria-pressed="false"
-        class="save-toggle-btn absolute top-3 right-3 px-2.5 py-0.5 rounded-full text-[11px] font-semibold border border-hairline bg-surface-elevated/90 backdrop-blur-md text-ink hover:border-primary transition-colors cursor-pointer"
+  {
+    !isCompact && (
+      <div
+        data-card-media
+        hidden={!imageUrl && !asTemplate}
+        class:list={[
+          'relative w-full overflow-hidden bg-surface-card',
+          isLead ? 'aspect-[16/9]' : 'aspect-[16/9]',
+        ]}
       >
-        <span data-save-label>Save</span>
-      </button>
-    </div>
-  )}
+        {/* width/height AND aspect-ratio: the attributes give the intrinsic
+            ratio, the CSS reserves the box even before the src resolves. */}
+        <img
+          data-card-image
+          src={imageUrl ?? undefined}
+          alt=""
+          width={isLead ? 900 : 400}
+          height={isLead ? 506 : 225}
+          class="h-full w-full object-cover"
+          loading={isLead ? 'eager' : 'lazy'}
+          decoding="async"
+        />
 
-  <div class="p-4 flex-1 flex flex-col justify-between space-y-3">
-    <div>
-      {!article.imageUrl && (
-        <div class="inline-flex items-center gap-1.5 mb-2 bg-surface-elevated px-2.5 py-0.5 rounded-full text-[11px] font-semibold capitalize text-ink border border-hairline shadow-stacked-sm">
-          <span class="w-1.5 h-1.5 rounded-full bg-primary"></span>
-          {article.category}
-        </div>
-      )}
-
-      <div class="text-[11px] font-mono text-mute mb-1.5">{article.source}</div>
-
-      <h3 class={`article-headline font-semibold text-ink leading-snug mb-2 group-hover:text-primary-strong transition-colors ${headlineSize}`}>
-        <a
-          href={article.url}
-          target="_blank"
-          rel="noopener noreferrer"
-          class="focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-strong rounded-sm"
+        {/* Save is the only thing over the image now, and it is a real 44x44
+            target with a name that says WHAT is being saved. */}
+        <button
+          type="button"
+          data-card-save
+          data-save-href={asTemplate ? undefined : article.url}
+          data-save-headline={asTemplate ? undefined : article.title}
+          aria-pressed="false"
+          class="save-toggle-btn absolute right-2 top-2 inline-flex h-11 w-11 cursor-pointer items-center justify-center rounded-full border border-hairline bg-surface-elevated/95 text-ink backdrop-blur-md transition-colors hover:border-primary"
         >
-          {article.title}
-        </a>
+          <svg
+            class="h-[18px] w-[18px]"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            aria-hidden="true"
+          >
+            <path
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              d="M6 4h12a1 1 0 0 1 1 1v15l-7-4-7 4V5a1 1 0 0 1 1-1z"
+            />
+          </svg>
+          <span class="sr-only">
+            <span data-save-label>Save</span>
+            <span data-field="title-sr">{title}</span>
+          </span>
+        </button>
+      </div>
+    )
+  }
+
+  <div class:list={['flex flex-1 flex-col justify-between gap-3', isCompact ? 'p-3' : 'p-4']}>
+    <div>
+      {/* Meta row: category · publisher · relative time. Fixed positions, so
+          the eye learns the pattern once (UI/UX spec §1 rule 4). Category is
+          text here rather than an overlay pill, which is what makes it
+          available to assistive tech at all. */}
+      <p class="font-mono-caption mb-1.5 flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-mute">
+        <span data-field="category" class="capitalize text-primary-strong">{category}</span>
+        <span aria-hidden="true">·</span>
+        <span data-field="source">{source}</span>
+        <span aria-hidden="true">·</span>
+        <span data-field="published">{published}</span>
+      </p>
+
+      <h3
+        class:list={[
+          'article-headline mb-2 font-semibold leading-snug text-ink transition-colors group-hover:text-primary-strong',
+          headlineSize,
+        ]}
+      >
+        <Tag
+          data-card-link
+          href={href ?? undefined}
+          target={href ? '_blank' : undefined}
+          rel={href ? 'noopener noreferrer' : undefined}
+          class="rounded-sm focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-strong"
+        >
+          <span data-field="title">{title}</span>
+        </Tag>
       </h3>
 
-      {article.summary && (
-        <p class={`article-short-news text-body leading-relaxed ${summaryClamp}`}>
-          {article.summary}
-        </p>
-      )}
+      {
+        !isCompact && (
+          <p
+            data-card-summary
+            hidden={!summary && !asTemplate}
+            class:list={[
+              'article-short-news leading-relaxed text-body',
+              isLead ? 'line-clamp-3 text-sm' : 'line-clamp-2 text-[15px]',
+            ]}
+          >
+            <span data-field="summary">{summary}</span>
+          </p>
+        )
+      }
     </div>
 
-    <div class="pt-3 border-t border-hairline flex items-center justify-between text-xs gap-2">
-      <span class="font-mono text-mute">{formatPublished(article.publishedAt)}</span>
+    {/* Value row. Reading time, coverage breadth and fact-check availability
+        are the fields that make this NewzWale's card rather than any
+        aggregator's — and each one is HIDDEN unless genuinely known. Never a
+        placeholder, never a zero (DESIGN_DIRECTION §6.1). The legacy
+        /api/news payload carries none of them, so on that path this row shows
+        only the save control. */}
+    <div class="flex items-center justify-between gap-2 border-t border-hairline pt-3 text-xs">
+      <div data-card-value class="font-mono-caption flex items-center gap-2 text-mute">
+        <slot name="value" />
+      </div>
 
-      <div class="flex items-center gap-1.5">
-        {!article.imageUrl && (
+      {
+        isCompact ? (
           <button
             type="button"
-            data-save-href={article.url}
-            data-save-headline={article.title}
+            data-card-save
+            data-save-href={asTemplate ? undefined : article.url}
+            data-save-headline={asTemplate ? undefined : article.title}
             aria-pressed="false"
-            class="save-toggle-btn px-2.5 py-1 rounded-md text-xs font-semibold border border-hairline bg-surface-elevated text-ink hover:border-primary transition-colors cursor-pointer"
+            class="save-toggle-btn inline-flex min-h-11 cursor-pointer items-center rounded-sm border border-hairline bg-surface-elevated px-3 text-xs font-semibold text-ink transition-colors hover:border-primary"
           >
             <span data-save-label>Save</span>
+            <span class="sr-only" data-field="title-sr">{title}</span>
           </button>
-        )}
-        <a
-          href={article.url}
-          target="_blank"
-          rel="noopener noreferrer"
-          class="px-3 py-1 bg-ink hover:bg-charcoal text-canvas text-xs font-semibold rounded-md shadow-stacked-sm transition-colors flex items-center gap-1.5"
-        >
-          <span>Read at source</span>
-          <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"></path></svg>
-        </a>
-      </div>
+        ) : (
+          <Tag
+            data-card-link
+            href={href ?? undefined}
+            target={href ? '_blank' : undefined}
+            rel={href ? 'noopener noreferrer' : undefined}
+            class="inline-flex min-h-11 items-center gap-1.5 rounded-sm px-1 text-xs font-semibold text-primary-strong"
+          >
+            Read at source
+            <svg class="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+              <path
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                stroke-width="2"
+                d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"
+              />
+            </svg>
+          </Tag>
+        )
+      }
     </div>
   </div>
 </article>
+</Wrapper>

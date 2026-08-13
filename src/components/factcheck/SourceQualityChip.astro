@@ -1,0 +1,43 @@
+---
+import { SOURCE_TIER_DEFINITIONS } from '../../lib/factcheck/schema';
+
+/** Publisher tier, spelled out.
+ *
+ *  "Tier 2" alone is jargon; the title carries the definition the pipeline
+ *  actually uses, straight from schema.ts, so the chip cannot drift from the
+ *  meaning.
+ */
+interface Props {
+  tier?: string | null;
+  class?: string;
+}
+
+const { tier, class: extraClass = '' } = Astro.props;
+
+const LABELS: Record<string, string> = {
+  tier1: 'Tier 1',
+  tier2: 'Tier 2',
+  tier3: 'Tier 3',
+};
+
+const label = tier ? LABELS[tier] : null;
+const definition =
+  tier && tier in SOURCE_TIER_DEFINITIONS
+    ? SOURCE_TIER_DEFINITIONS[tier as keyof typeof SOURCE_TIER_DEFINITIONS]
+    : null;
+---
+
+{
+  label && (
+    <span
+      title={definition ?? undefined}
+      class:list={[
+        'font-mono-caption inline-flex items-center rounded-full border border-hairline bg-surface-card px-2 py-0.5 text-mute',
+        extraClass,
+      ]}
+    >
+      {label}
+      {definition && <span class="sr-only"> — {definition}</span>}
+    </span>
+  )
+}

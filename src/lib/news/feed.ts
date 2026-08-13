@@ -1,14 +1,13 @@
 import type { Article } from './types';
+import { isSafeUrl } from '../url';
 
-/** Feed URLs are rendered straight into href, so only http(s) links are kept. */
-export function isSafeUrl(value: string): boolean {
-  try {
-    const { protocol } = new URL(value);
-    return protocol === 'http:' || protocol === 'https:';
-  } catch {
-    return false;
-  }
-}
+/** Feed URLs are rendered straight into href, so only http(s) links are kept.
+ *
+ *  Re-exported from ../url.ts rather than reimplemented. This module used to
+ *  own a second copy of the scheme check, which is how a security rule ends up
+ *  fixed in one place and stale in another - the fact-check evidence list had
+ *  no check at all while this one did. One implementation, several importers. */
+export { isSafeUrl } from '../url';
 
 /** Unparseable dates sort last rather than throwing. */
 function time(value: string): number {

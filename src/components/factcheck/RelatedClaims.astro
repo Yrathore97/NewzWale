@@ -1,0 +1,40 @@
+---
+import type { FactCheckRecord } from '../../lib/db/repositories/fact-checks';
+import FactCheckChip from '../news/FactCheckChip.astro';
+
+/** Other completed checks on the same topic.
+ *
+ *  REAL RECORDS ONLY. Every row is a persisted fact-check with its own id and
+ *  its own verdict; nothing here is illustrative. Rendered only when there is
+ *  something to show — an empty "Related claims" heading on a fact-checking
+ *  product would suggest we searched and found the claim isolated, which is
+ *  not what an empty list means.
+ */
+interface Props {
+  claims: FactCheckRecord[];
+  class?: string;
+}
+
+const { claims, class: extraClass = '' } = Astro.props;
+---
+
+{
+  claims.length > 0 && (
+    <section class:list={['w-full', extraClass]} aria-labelledby="related-heading">
+      <h2 id="related-heading" class="font-mono-caption mb-3 border-b border-hairline pb-2 text-mute">
+        Related claims we have checked
+      </h2>
+
+      <ul class="flex flex-col divide-y divide-hairline-soft">
+        {claims.map((c) => (
+          <li>
+            <a href={`/fact-check/${c.id}`} class="flex min-h-11 flex-col gap-2 py-3">
+              <span class="text-[15px] font-medium leading-snug text-ink">{c.claim}</span>
+              <FactCheckChip verdict={c.verdict} />
+            </a>
+          </li>
+        ))}
+      </ul>
+    </section>
+  )
+}

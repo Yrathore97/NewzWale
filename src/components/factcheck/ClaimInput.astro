@@ -1,0 +1,106 @@
+---
+/** ONE input. URL vs text is detected, not chosen.
+ *
+ *  The previous widget opened with three tabs — Text / URL / Image — which
+ *  asks the reader to classify their own input before they get any help. For
+ *  the forward-checker arriving from WhatsApp with something pasted from a
+ *  family group, that is friction at exactly the wrong moment
+ *  (NEWZWALE_UI_UX_SPEC §5.1). Detection is trivial and the reader's
+ *  classification adds nothing.
+ *
+ *  Image stays a separate, clearly-disabled entry rather than a tab that
+ *  silently does nothing.
+ */
+interface Props {
+  /** Pre-filled from ?claim= when arriving from the homepage hero. */
+  initialClaim?: string;
+}
+
+const { initialClaim = '' } = Astro.props;
+
+const DEMOS = [
+  {
+    label: 'RBI repo rate',
+    claim: 'RBI keeps repo rate unchanged at 6.5% for FY27 projecting 7.2% GDP growth.',
+  },
+  {
+    label: 'Viral bank-holiday forward',
+    claim:
+      'Emergency bank holiday declared across India starting tomorrow for 3 days due to currency audit.',
+  },
+  {
+    label: 'ISRO satellite launch',
+    claim: 'ISRO successfully launches INSAT-3DS weather satellite from Sriharikota.',
+  },
+];
+---
+
+<div id="claim-input-step" class="flex flex-col gap-3">
+  <label for="claim-input" class="text-lg font-semibold text-ink">
+    Know what's true.
+  </label>
+
+  <textarea
+    id="claim-input"
+    name="claim"
+    rows="3"
+    maxlength="2000"
+    autocomplete="off"
+    spellcheck="false"
+    placeholder="Paste a claim, headline, or link…"
+    class="min-h-24 w-full resize-y rounded-sm border border-hairline bg-surface-elevated px-4 py-3 text-base leading-relaxed text-ink placeholder:text-mute focus:outline-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-strong"
+    >{initialClaim}</textarea
+  >
+
+  {/* Announced, so a screen-reader user knows a URL was recognised without
+      having to guess from a visual chip. */}
+  <p
+    id="claim-type-note"
+    role="status"
+    aria-live="polite"
+    class="font-mono-caption min-h-4 text-mute"
+  >
+  </p>
+
+  <div class="flex flex-wrap items-center gap-2">
+    <button
+      type="button"
+      id="claim-submit"
+      class="btn-pill-primary inline-flex min-h-11 cursor-pointer items-center px-5 text-sm"
+    >
+      Check →
+    </button>
+
+    <button
+      type="button"
+      id="claim-paste"
+      hidden
+      class="btn-pill-secondary inline-flex min-h-11 cursor-pointer items-center px-5 text-sm"
+    >
+      Paste from clipboard
+    </button>
+  </div>
+
+  <p class="font-mono-caption text-mute">Checks published fact-checkers, then live sources.</p>
+
+  <div class="flex flex-col gap-1.5 border-t border-hairline-soft pt-3">
+    <span class="font-mono-caption text-mute">Try one</span>
+    <div class="flex flex-wrap gap-2">
+      {
+        DEMOS.map((d) => (
+          <button
+            type="button"
+            class="demo-prompt-btn btn-pill-secondary inline-flex min-h-11 cursor-pointer items-center px-4 text-xs"
+            data-demo-claim={d.claim}
+          >
+            {d.label}
+          </button>
+        ))
+      }
+    </div>
+  </div>
+
+  <p class="font-mono-caption border-t border-hairline-soft pt-3 text-mute">
+    Image and screenshot checking is not available yet.
+  </p>
+</div>

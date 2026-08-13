@@ -1,40 +1,66 @@
 ---
 import { LANGUAGES, isValidLanguage, DEFAULT_LANGUAGE } from '../lib/news/languages';
 
+/** Masthead utility strip: weather, date, market ticker, language, saved, theme.
+ *
+ *  P6 closed S-09 and A-07 here. This component used to make THREE third-party
+ *  calls from the browser on every page load — open-meteo with precise
+ *  coordinates, bigdatacloud with precise coordinates, and ipapi.co with the
+ *  visitor's IP — and it called `navigator.geolocation.getCurrentPosition()`
+ *  with no user gesture at all, so a permission prompt appeared unprompted on
+ *  first visit.
+ *
+ *  All four are gone. Weather now comes from /api/v1/weather, which derives a
+ *  city-level position from `request.cf` inside the Worker. The visitor's IP
+ *  and exact position never leave our infrastructure, no permission is
+ *  requested, and three origins left the CSP.
+ */
 const rawLanguage = Astro.url.searchParams.get('language');
 const currentLanguage = isValidLanguage(rawLanguage) ? rawLanguage : DEFAULT_LANGUAGE;
 ---
 
-<div id="masthead-info-strip" class="relative w-full bg-surface-dark text-canvas dark:text-ink py-1.5 px-4 font-mono-caption transition-colors duration-200">
-  <div id="masthead-strip-scroll" class="max-w-[1400px] mx-auto flex items-center justify-between gap-4 overflow-x-auto no-scrollbar">
-
-    <!-- Left: Weather, Location & Date. This bar stays dark in both site
-         themes, so every text colour here is the "always-dark-band" pair
+<div
+  id="masthead-info-strip"
+  class="font-mono-caption relative w-full bg-surface-dark px-4 py-1.5 text-canvas transition-colors duration-200 dark:text-ink"
+>
+  <div
+    id="masthead-strip-scroll"
+    class="no-scrollbar mx-auto flex max-w-[1400px] items-center justify-between gap-4 overflow-x-auto"
+  >
+    <!-- Left: weather, date, ticker. This bar stays dark in both site themes,
+         so every text colour here is the "always-dark-band" pair
          (light-mode token / dark:ink), never a token that inverts. -->
-    <div class="flex items-center gap-4 shrink-0">
-      <div id="weather-widget-container" class="flex items-center gap-1.5">
-        <span id="weather-location" class="font-semibold text-canvas dark:text-ink">New Delhi</span>
+    <div class="flex shrink-0 items-center gap-4">
+      <!-- Hidden until real data arrives. It previously shipped a hardcoded
+           "New Delhi 31°C ☀️" in the markup, which is invented weather shown
+           to every reader — the honest-states rule forbids exactly that. -->
+      <div id="weather-widget-container" hidden class="flex items-center gap-1.5">
+        <span id="weather-location" class="font-semibold text-canvas dark:text-ink"></span>
         <span class="opacity-70">·</span>
-        <span id="weather-temp" class="font-semibold text-primary">31°C</span>
-        <span id="weather-condition">☀️</span>
+        <span id="weather-temp" class="font-semibold text-primary"></span>
+        <span id="weather-condition"></span>
       </div>
-      <span class="opacity-70" id="masthead-date-text">Tue, Aug 4, 2026</span>
-      <span id="ticker" hidden class="opacity-80 whitespace-nowrap"></span>
+      <span class="opacity-70" id="masthead-date-text"></span>
+      <span id="ticker" hidden class="whitespace-nowrap opacity-80"></span>
     </div>
 
-    <!-- Right: Language, Saved, Theme -->
-    <div class="flex items-center gap-4 shrink-0">
+    <!-- Right: language, saved, theme -->
+    <div class="flex shrink-0 items-center gap-4">
       <label class="flex items-center gap-1.5">
-        <span class="opacity-70 hidden sm:inline">Language</span>
+        <span class="hidden opacity-70 sm:inline">Language</span>
         <select
           id="language-select"
           aria-label="Choose the language of news headlines"
           title="Changes the language of news headlines, not the site interface"
-          class="appearance-none bg-surface-dark text-canvas dark:text-ink border border-charcoal dark:border-hairline-soft rounded-md font-mono-caption px-1.5 py-0.5 cursor-pointer focus:outline-none focus:ring-1 focus:ring-primary-strong"
+          class="font-mono-caption cursor-pointer appearance-none rounded-md border border-charcoal bg-surface-dark px-1.5 py-0.5 text-canvas focus:outline-none focus:ring-1 focus:ring-primary-strong dark:border-hairline-soft dark:text-ink"
         >
-          {LANGUAGES.map((lang) => (
-            <option value={lang.code} selected={lang.code === currentLanguage}>{lang.name}</option>
-          ))}
+          {
+            LANGUAGES.map((lang) => (
+              <option value={lang.code} selected={lang.code === currentLanguage}>
+                {lang.name}
+              </option>
+            ))
+          }
         </select>
       </label>
 
@@ -44,222 +70,141 @@ const currentLanguage = isValidLanguage(rawLanguage) ? rawLanguage : DEFAULT_LAN
         aria-label="View saved articles"
         aria-expanded="false"
         aria-controls="saved-drawer"
-        class="bg-transparent border-none text-canvas dark:text-ink hover:text-primary font-mono-caption uppercase cursor-pointer"
+        class="font-mono-caption cursor-pointer border-none bg-transparent uppercase text-canvas hover:text-primary dark:text-ink"
       >
         Saved (<span data-saved-count>0</span>)
       </button>
 
       <button
         type="button"
-        class="theme-toggle-trigger bg-transparent border-none text-canvas dark:text-ink hover:text-primary font-mono-caption uppercase cursor-pointer"
+        class="theme-toggle-trigger font-mono-caption cursor-pointer border-none bg-transparent uppercase text-canvas hover:text-primary dark:text-ink"
       >
         <span class="block dark:hidden">Light</span>
         <span class="hidden dark:block">Dark</span>
       </button>
     </div>
-
   </div>
-  <div id="masthead-strip-fade" class="pointer-events-none absolute inset-y-0 right-0 w-10 bg-gradient-to-l from-surface-dark to-transparent transition-opacity duration-200" aria-hidden="true"></div>
+  <div
+    id="masthead-strip-fade"
+    class="pointer-events-none absolute inset-y-0 right-0 w-10 bg-gradient-to-l from-surface-dark to-transparent transition-opacity duration-200"
+    aria-hidden="true"
+  >
+  </div>
 </div>
 
 <script>
-  const WEATHER_CACHE_KEY = 'newzwale_weather_cache';
-  const WEATHER_TTL = 15 * 60 * 1000; // 15 minutes TTL
-
-  // Locale mapper for dates
   const LANG_LOCALE_MAP: Record<string, string> = {
-    'en': 'en-IN',
-    'hi': 'hi-IN',
-    'bn': 'bn-IN',
-    'mr': 'mr-IN',
-    'te': 'te-IN',
-    'ta': 'ta-IN',
-    'gu': 'gu-IN',
-    'kn': 'kn-IN',
-    'ml': 'ml-IN',
-    'pa': 'pa-IN',
-    'or': 'or-IN',
-    'as': 'as-IN',
-    'ur': 'ur-IN'
+    en: 'en-IN',
+    hi: 'hi-IN',
+    bn: 'bn-IN',
+    mr: 'mr-IN',
+    te: 'te-IN',
+    ta: 'ta-IN',
+    gu: 'gu-IN',
+    kn: 'kn-IN',
+    ml: 'ml-IN',
+    pa: 'pa-IN',
+    or: 'or-IN',
+    as: 'as-IN',
+    ur: 'ur-IN',
   };
 
-  function updateMastheadDate(langCode: string = 'en') {
-    const dateTextEl = document.getElementById('masthead-date-text');
-    if (!dateTextEl) return;
+  function updateMastheadDate(langCode = 'en') {
+    const el = document.getElementById('masthead-date-text');
+    if (!el) return;
+    const options: Intl.DateTimeFormatOptions = {
+      weekday: 'short',
+      month: 'short',
+      day: 'numeric',
+      year: 'numeric',
+    };
+    try {
+      el.textContent = new Date().toLocaleDateString(LANG_LOCALE_MAP[langCode] ?? 'en-IN', options);
+    } catch {
+      el.textContent = new Date().toDateString();
+    }
+  }
+
+  /** Presentation for the condition slugs /api/v1/weather returns. Anything
+   *  not listed — including the API's own 'unknown' — renders no icon and no
+   *  label rather than being forced into the nearest one. */
+  const CONDITIONS: Record<string, { icon: string; text: string }> = {
+    clear: { icon: '☀️', text: 'Clear' },
+    'mainly-clear': { icon: '🌤️', text: 'Mainly clear' },
+    'partly-cloudy': { icon: '⛅', text: 'Partly cloudy' },
+    overcast: { icon: '☁️', text: 'Overcast' },
+    fog: { icon: '🌫️', text: 'Fog' },
+    drizzle: { icon: '🌧️', text: 'Drizzle' },
+    rain: { icon: '🌧️', text: 'Rain' },
+    'heavy-rain': { icon: '🌧️', text: 'Heavy rain' },
+    'freezing-rain': { icon: '🌧️', text: 'Freezing rain' },
+    snow: { icon: '❄️', text: 'Snow' },
+    'heavy-snow': { icon: '❄️', text: 'Heavy snow' },
+    showers: { icon: '🌦️', text: 'Showers' },
+    'heavy-showers': { icon: '🌦️', text: 'Heavy showers' },
+    thunderstorm: { icon: '🌩️', text: 'Thunderstorm' },
+  };
+
+  interface WeatherPayload {
+    location: string | null;
+    temperatureC: number;
+    condition: string;
+  }
+
+  async function loadWeather() {
+    const box = document.getElementById('weather-widget-container');
+    const loc = document.getElementById('weather-location');
+    const temp = document.getElementById('weather-temp');
+    const cond = document.getElementById('weather-condition');
+    if (!box || !loc || !temp || !cond) return;
 
     try {
-      const locale = LANG_LOCALE_MAP[langCode] || 'en-IN';
-      const now = new Date();
-      const options: Intl.DateTimeFormatOptions = {
-        weekday: 'short',
-        month: 'short',
-        day: 'numeric',
-        year: 'numeric'
-      };
-      dateTextEl.innerText = now.toLocaleDateString(locale, options);
-    } catch (e) {
-      dateTextEl.innerText = new Date().toDateString();
+      const res = await fetch('/api/v1/weather', { signal: AbortSignal.timeout(4000) });
+      if (!res.ok) return; // stays hidden
+      const body = (await res.json()) as { data?: WeatherPayload };
+      const data = body.data;
+      if (!data || typeof data.temperatureC !== 'number') return;
+
+      // No city name means Cloudflare could not place the request. Showing the
+      // temperature without a place is honest; substituting "New Delhi" is not.
+      loc.textContent = data.location ?? 'Your area';
+      temp.textContent = `${Math.round(data.temperatureC)}°C`;
+
+      const c = CONDITIONS[data.condition];
+      cond.textContent = c ? `${c.icon} ${c.text}` : '';
+
+      box.hidden = false;
+    } catch {
+      // Network failure or timeout: the strip simply carries no weather.
+      // Graceful degradation, with nothing invented to fill the gap.
     }
   }
 
-  // WMO Weather code interpreter
-  function getWMOWeatherDescription(code: number): { text: string; icon: string } {
-    if (code === 0) return { text: 'Clear', icon: '☀️' };
-    if (code === 1 || code === 2) return { text: 'Partly Cloudy', icon: '⛅' };
-    if (code === 3) return { text: 'Overcast', icon: '☁️' };
-    if (code >= 45 && code <= 48) return { text: 'Foggy', icon: '🌫️' };
-    if (code >= 51 && code <= 67) return { text: 'Drizzle/Rain', icon: '🌧️' };
-    if (code >= 71 && code <= 77) return { text: 'Snow', icon: '❄️' };
-    if (code >= 80 && code <= 82) return { text: 'Showers', icon: '🌦️' };
-    if (code >= 95) return { text: 'Thunderstorm', icon: '🌩️' };
-    return { text: 'Fair', icon: '🌡️' };
-  }
+  updateMastheadDate(localStorage.getItem('userLanguage') ?? 'en');
+  loadWeather();
 
-  async function fetchWeather(lat: number, lon: number, cityName?: string) {
-    const weatherLoc = document.getElementById('weather-location');
-    const weatherTemp = document.getElementById('weather-temp');
-    const weatherCond = document.getElementById('weather-condition');
-
-    try {
-      const weatherRes = await fetch(
-        `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current_weather=true`,
-        { signal: AbortSignal.timeout(4000) }
-      );
-
-      if (!weatherRes.ok) throw new Error('Weather API error');
-      const weatherData = (await weatherRes.json()) as {
-        current_weather?: { temperature: number; weathercode: number };
-      };
-      const current = weatherData.current_weather;
-
-      if (!current) throw new Error('No weather data');
-
-      const temp = Math.round(current.temperature);
-      const { text, icon } = getWMOWeatherDescription(current.weathercode);
-      const name = cityName || 'Local';
-
-      if (weatherLoc) weatherLoc.innerText = name;
-      if (weatherTemp) weatherTemp.innerText = `${temp}°C`;
-      if (weatherCond) weatherCond.innerText = `${icon} ${text}`;
-
-      // Cache weather in localStorage
-      localStorage.setItem(WEATHER_CACHE_KEY, JSON.stringify({
-        timestamp: Date.now(),
-        location: name,
-        temp: `${temp}°C`,
-        condition: `${icon} ${text}`
-      }));
-
-    } catch (err) {
-      // Graceful degradation: retain fallback values without error
-      if (weatherLoc && !weatherLoc.innerText) weatherLoc.innerText = 'New Delhi';
-    }
-  }
-
-  async function fetchWeatherWithGeocoding(lat: number, lon: number, defaultName?: string) {
-    let resolvedCity = defaultName || '';
-    if (!resolvedCity || resolvedCity === 'Your Location' || resolvedCity === 'Local') {
-      try {
-        const geoRes = await fetch(
-          `https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=${lat}&longitude=${lon}&localityLanguage=en`,
-          { signal: AbortSignal.timeout(3000) }
-        );
-        if (geoRes.ok) {
-          const geoData = (await geoRes.json()) as {
-            city?: string;
-            locality?: string;
-            principalSubdivision?: string;
-            countryName?: string;
-          };
-          resolvedCity = geoData.city || geoData.locality || geoData.principalSubdivision || geoData.countryName || '';
-        }
-      } catch (e) {}
-    }
-    if (!resolvedCity) resolvedCity = 'New Delhi';
-
-    await fetchWeather(lat, lon, resolvedCity);
-  }
-
-  async function detectLocationByIP(): Promise<boolean> {
-    try {
-      const ipRes = await fetch('https://ipapi.co/json/', { signal: AbortSignal.timeout(3500) });
-      if (ipRes.ok) {
-        const data = (await ipRes.json()) as {
-          latitude?: number;
-          longitude?: number;
-          city?: string;
-          region?: string;
-        };
-        if (data.latitude && data.longitude) {
-          const cityName = data.city || data.region || 'Local';
-          await fetchWeather(data.latitude, data.longitude, cityName);
-          return true;
-        }
-      }
-    } catch (e) {}
-    return false;
-  }
-
-  function initWeather() {
-    // Check localStorage cache
-    const cached = localStorage.getItem(WEATHER_CACHE_KEY);
-    if (cached) {
-      try {
-        const parsed = JSON.parse(cached);
-        if (parsed.location && parsed.location !== 'Your Location' && Date.now() - parsed.timestamp < WEATHER_TTL) {
-          const weatherLoc = document.getElementById('weather-location');
-          const weatherTemp = document.getElementById('weather-temp');
-          const weatherCond = document.getElementById('weather-condition');
-          if (weatherLoc) weatherLoc.innerText = parsed.location;
-          if (weatherTemp) weatherTemp.innerText = parsed.temp;
-          if (weatherCond) weatherCond.innerText = parsed.condition;
-          return;
-        }
-      } catch (e) {}
-    }
-
-    // Try Browser Geolocation
-    if ('geolocation' in navigator) {
-      navigator.geolocation.getCurrentPosition(
-        async (pos) => {
-          await fetchWeatherWithGeocoding(pos.coords.latitude, pos.coords.longitude);
-        },
-        async () => {
-          // Geolocation denied/failed -> try IP detection
-          const ok = await detectLocationByIP();
-          if (!ok) fetchWeather(28.6139, 77.2090, 'New Delhi');
-        },
-        { timeout: 4000 }
-      );
-    } else {
-      detectLocationByIP().then(ok => {
-        if (!ok) fetchWeather(28.6139, 77.2090, 'New Delhi');
-      });
-    }
-  }
-
-  // Initialize on DOM load
-  document.addEventListener('DOMContentLoaded', () => {
-    const savedLang = localStorage.getItem('userLanguage') || 'en';
-    updateMastheadDate(savedLang);
-    initWeather();
+  window.addEventListener('language-changed', (e) => {
+    const detail = (e as CustomEvent<{ langCode?: string }>).detail;
+    updateMastheadDate(detail?.langCode ?? 'en');
   });
 
-  // Edge fade hint: hide once scrolled to the end, or if there's nothing to
+  // Edge fade hint: hidden once scrolled to the end, or if there is nothing to
   // scroll to begin with.
   const stripScroll = document.getElementById('masthead-strip-scroll');
   const stripFade = document.getElementById('masthead-strip-fade');
   if (stripScroll && stripFade) {
     const updateStripFade = () => {
-      const atEnd = stripScroll.scrollLeft + stripScroll.clientWidth >= stripScroll.scrollWidth - 1;
+      const atEnd =
+        stripScroll.scrollLeft + stripScroll.clientWidth >= stripScroll.scrollWidth - 1;
       stripFade.style.opacity = atEnd ? '0' : '1';
     };
     updateStripFade();
     stripScroll.addEventListener('scroll', updateStripFade, { passive: true });
     window.addEventListener('resize', updateStripFade);
 
-    // One-time "peek" nudge on load, same as the category strip.
-    if (stripScroll.scrollWidth > stripScroll.clientWidth) {
+    // One-time peek nudge, skipped under reduced motion (UI/UX spec §9).
+    const reduced = window.matchMedia('(prefers-reduced-motion: reduce)');
+    if (!reduced.matches && stripScroll.scrollWidth > stripScroll.clientWidth) {
       setTimeout(() => {
         stripScroll.scrollTo({ left: 56, behavior: 'smooth' });
         setTimeout(() => stripScroll.scrollTo({ left: 0, behavior: 'smooth' }), 450);
@@ -267,18 +212,16 @@ const currentLanguage = isValidLanguage(rawLanguage) ? rawLanguage : DEFAULT_LAN
     }
   }
 
-  // Listen to global language change events
-  window.addEventListener('language-changed', (e: any) => {
-    const { langCode } = e.detail;
-    updateMastheadDate(langCode);
-  });
-
-  // Live market indices. The strip stays hidden unless real quotes arrive -
+  // Live market indices. The strip stays hidden unless real quotes arrive —
   // never show invented numbers.
   type Quote = { price: number; changePct: number | null };
 
   fetch('/api/ticker')
-    .then((r) => (r.ok ? (r.json() as Promise<{ sensex: Quote; nifty: Quote }>) : Promise.reject(new Error('ticker unavailable'))))
+    .then((r) =>
+      r.ok
+        ? (r.json() as Promise<{ sensex: Quote; nifty: Quote }>)
+        : Promise.reject(new Error('ticker unavailable')),
+    )
     .then((d) => {
       const el = document.getElementById('ticker');
       if (!el) return;
@@ -293,8 +236,6 @@ const currentLanguage = isValidLanguage(rawLanguage) ? rawLanguage : DEFAULT_LAN
       /* stays hidden - never show invented numbers */
     });
 
-  // Saved-articles drawer lives in its own component; this just asks it to
-  // toggle rather than reaching into its DOM.
   document.getElementById('saved-drawer-toggle')?.addEventListener('click', () => {
     window.dispatchEvent(new CustomEvent('nz-saved-drawer-toggle'));
   });

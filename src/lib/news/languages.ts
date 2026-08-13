@@ -8,28 +8,41 @@
 export interface Language {
   code: string;
   name: string;
+  /** Base writing direction for content in this language. Only Urdu, written
+   *  in the Nastaliq/Arabic script, is right-to-left. */
+  dir: 'ltr' | 'rtl';
 }
 
 export const DEFAULT_LANGUAGE = 'en';
 
 export const LANGUAGES: Language[] = [
-  { code: 'en', name: 'English' },
-  { code: 'hi', name: 'हिंदी (Hindi)' },
-  { code: 'bn', name: 'বাংলা (Bengali)' },
-  { code: 'mr', name: 'मराठी (Marathi)' },
-  { code: 'te', name: 'తెలుగు (Telugu)' },
-  { code: 'ta', name: 'தமிழ் (Tamil)' },
-  { code: 'gu', name: 'ગુજરાતી (Gujarati)' },
-  { code: 'kn', name: 'ಕನ್ನಡ (Kannada)' },
-  { code: 'ml', name: 'മലയാളം (Malayalam)' },
-  { code: 'pa', name: 'ਪੰਜਾਬੀ (Punjabi)' },
-  { code: 'or', name: 'ଓଡ଼ିଆ (Odia)' },
-  { code: 'as', name: 'অসমীয়া (Assamese)' },
-  { code: 'ur', name: 'اردو (Urdu)' },
+  { code: 'en', name: 'English', dir: 'ltr' },
+  { code: 'hi', name: 'हिंदी (Hindi)', dir: 'ltr' },
+  { code: 'bn', name: 'বাংলা (Bengali)', dir: 'ltr' },
+  { code: 'mr', name: 'मराठी (Marathi)', dir: 'ltr' },
+  { code: 'te', name: 'తెలుగు (Telugu)', dir: 'ltr' },
+  { code: 'ta', name: 'தமிழ் (Tamil)', dir: 'ltr' },
+  { code: 'gu', name: 'ગુજરાતી (Gujarati)', dir: 'ltr' },
+  { code: 'kn', name: 'ಕನ್ನಡ (Kannada)', dir: 'ltr' },
+  { code: 'ml', name: 'മലയാളം (Malayalam)', dir: 'ltr' },
+  { code: 'pa', name: 'ਪੰਜਾਬੀ (Punjabi)', dir: 'ltr' },
+  { code: 'or', name: 'ଓଡ଼ିଆ (Odia)', dir: 'ltr' },
+  { code: 'as', name: 'অসমীয়া (Assamese)', dir: 'ltr' },
+  { code: 'ur', name: 'اردو (Urdu)', dir: 'rtl' },
 ];
 
 const CODES = new Set(LANGUAGES.map((l) => l.code));
 
 export function isValidLanguage(code: unknown): code is string {
   return typeof code === 'string' && CODES.has(code);
+}
+
+/** Writing direction for a content language code.
+ *
+ *  `<html lang>` was hardcoded to "en" across all 13 languages, which told
+ *  screen readers to pronounce Hindi and Tamil headlines with English phonetics
+ *  (audit A-01). Unknown codes fall back to ltr rather than throwing: a bad
+ *  ?language= value should not be able to break the page shell. */
+export function languageDir(code: unknown): 'ltr' | 'rtl' {
+  return LANGUAGES.find((l) => l.code === code)?.dir ?? 'ltr';
 }

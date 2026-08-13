@@ -25,6 +25,7 @@ const language = isValidLanguage(rawLanguage) ? rawLanguage : DEFAULT_LANGUAGE;
 <Layout
   title={`${category.label} News Today — Latest ${category.label} Headlines | NewzWale`}
   description={`Latest ${category.label.toLowerCase()} news and breaking headlines from Indian and international publishers, updated through the day on NewzWale.`}
+  lang={language}
 >
   <Navbar />
   <MastheadInfoStrip />

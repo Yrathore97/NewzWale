@@ -1,0 +1,64 @@
+---
+import { verdictPresentation } from '../../lib/ui/verdict';
+
+/** The verdict, as icon + text label + colour — all three, always.
+ *
+ *  WCAG 1.4.1. The LABEL is `ink` on a neutral surface for every verdict, not
+ *  the verdict colour: amber (`warning`, reused by PARTLY_TRUE) peaks at
+ *  4.43:1 on white and 3.99:1 on surface-card, so it cannot legally carry
+ *  small text, and the token layer is frozen. The verdict colour therefore
+ *  carries the BORDER and the GLYPH CHIP, both of which are non-text UI at
+ *  3:1. Every one of those pairings is asserted in tests/contrast.test.ts.
+ *
+ *  Solid vs outline is the CVD-safe distinction between PARTLY_TRUE and
+ *  MISLEADING — see lib/ui/verdict.ts.
+ *
+ *  `asTemplate` renders a fillable clone for the client-side widget, so the
+ *  server result page and the live check show the identical badge.
+ */
+interface Props {
+  verdict?: string | null;
+  size?: 'default' | 'large';
+  asTemplate?: boolean;
+  templateId?: string;
+}
+
+const {
+  verdict,
+  size = 'default',
+  asTemplate = false,
+  templateId = 'verdict-badge-template',
+} = Astro.props;
+
+const p = verdictPresentation(asTemplate ? 'unverified' : verdict);
+const isLarge = size === 'large';
+
+const Wrapper = asTemplate ? 'template' : Fragment;
+const wrapperProps = asTemplate ? { id: templateId } : {};
+---
+
+<Wrapper {...wrapperProps}>
+  <span
+    data-verdict-badge
+    data-verdict={asTemplate ? undefined : p.verdict}
+    class:list={[
+      'inline-flex items-center gap-2 rounded-sm bg-surface-card font-semibold uppercase tracking-wide text-ink',
+      isLarge ? 'px-4 py-2.5 text-sm' : 'px-3 py-1.5 text-xs',
+      p.borderClass,
+    ]}
+  >
+    <span
+      data-verdict-glyph
+      aria-hidden="true"
+      class:list={[
+        'inline-flex items-center justify-center rounded-full leading-none',
+        isLarge ? 'h-6 w-6 text-sm' : 'h-5 w-5 text-xs',
+        p.glyphClass,
+      ]}>{p.icon}</span
+    >
+    <span data-verdict-label>{p.label}</span>
+    {/* The badge's accessible text is the full sentence, so "MISLEADING" is
+        never announced bare and mistaken for a site error. */}
+    <span class="sr-only" data-verdict-description>— {p.description}</span>
+  </span>
+</Wrapper>

@@ -15,7 +15,79 @@
 		{ "binding": "SESSION", "id": "1850d81959b6492fa926dea8cbe993f2" }
 	],
 	"ai": { "binding": "AI" },
+
+	// The IMAGES binding is deliberately NOT declared here.
+	//
+	// @astrojs/cloudflare resolves `imageService` to 'cloudflare-binding' by
+	// default and auto-injects `images: { binding: "IMAGES" }` when this file
+	// declares none (verified in dist/wrangler.js). Unlike a KV namespace, an
+	// Images binding needs no id, so the adapter can supply it in full and
+	// there is nothing to declare. Cloudflare Images is therefore ALREADY
+	// ACTIVE in production. See docs/NEWZWALE_AUDIT.md, correction to P-19.
+
 	"observability": {
 		"enabled": true
 	}
+
+	// ─────────────────────────────────────────────────────────────────────────
+	// TARGET ARCHITECTURE — PREPARED, NOT YET ACTIVE
+	//
+	// The blocks below are the approved Phase 2+ bindings. They are commented
+	// out ON PURPOSE: each needs a real resource id that must be created
+	// against the Cloudflare account at deploy time. Inventing placeholder ids
+	// would produce a config that looks valid and fails at deploy, which is
+	// worse than an obviously absent one.
+	//
+	// Uncomment each block only in the phase that starts using it, after
+	// running the matching provisioning command and pasting the REAL id.
+	//
+	// ── D1 (Phase 2 — system of record) ──────────────────────────────────────
+	// Provision:  npx wrangler d1 create newzwale
+	// Migrate:    npx wrangler d1 execute newzwale --remote \
+	//               --file=src/lib/db/migrations/0001_init.sql
+	// Schema already written: src/lib/db/migrations/0001_init.sql
+	//
+	// "d1_databases": [
+	//   {
+	//     "binding": "NEWZ_DB",
+	//     "database_name": "newzwale",
+	//     "database_id": "<DEPLOYMENT-TIME: output of `wrangler d1 create`>"
+	//   }
+	// ],
+	//
+	// ── Durable Object (Phase 1 — atomic rate limiting) ──────────────────────
+	// IMPLEMENTED in src/lib/durable/rate-limiter.ts and exported from
+	// src/worker.ts. Replaces the non-atomic KV counter: KV has no atomic
+	// increment, so the old read-then-write limiter let N concurrent requests
+	// all pass. See NEWZWALE_SECURITY_AUDIT.md S-01.
+	//
+	// The application already handles the binding being ABSENT — see
+	// checkRateLimitSafe() in src/lib/ratelimit.ts, which fails OPEN and logs.
+	// That is why this can stay commented out without breaking anything.
+	//
+	// TO ENABLE (no account id needed — Durable Objects are provisioned by the
+	// deploy itself, unlike D1):
+	//   1. change "main" above to "./src/worker.ts"
+	//   2. uncomment the two blocks below
+	//   3. npx wrangler deploy
+	//
+	// "durable_objects": {
+	//   "bindings": [
+	//     { "name": "RATE_LIMITER", "class_name": "RateLimiter" }
+	//   ]
+	// },
+	// "migrations": [
+	//   { "tag": "v1", "new_sqlite_classes": ["RateLimiter"] }
+	// ],
+	//
+	// ── Cron (Phase 2 — scheduled ingestion off the read path) ───────────────
+	// Moves news ingestion out of the request path. Schedule is a PLACEHOLDER:
+	// the real interval must be set only AFTER measuring provider coverage and
+	// quota (11 categories x 13 languages = 143 combinations is far beyond any
+	// free tier). See NEWZWALE_IMPLEMENTATION_PLAN.md, Phase 2 risks.
+	//
+	// "triggers": {
+	//   "crons": ["*/10 * * * *"]
+	// }
+	// ─────────────────────────────────────────────────────────────────────────
 }

@@ -1,0 +1,100 @@
+---
+import Layout from '../layouts/Layout.astro';
+import Navbar from '../components/Navbar.astro';
+import MastheadInfoStrip from '../components/MastheadInfoStrip.astro';
+import Footer from '../components/Footer.astro';
+import EmptyState from '../components/shared/EmptyState.astro';
+
+// P5: "/saved — Saved articles (today: a drawer) — Local store". Promotes
+// the existing drawer's storage to a full page. Reuses window.NZ.getSaved()/
+// toggleSaved(), defined once in Layout.astro and already used by
+// SavedArticlesDrawer.astro and ArticleCard's save buttons — no new storage
+// schema, no server-side persistence.
+//
+// P6 KEEPS THIS A FULL PAGE per the explicit SAVED decision: the BottomNav
+// "You" destination links here rather than replacing it with a drawer-only
+// view.
+export const prerender = true;
+---
+
+<Layout title="Saved Articles | NewzWale" description="Articles you've saved to read later, stored on this device.">
+  <Navbar />
+  <MastheadInfoStrip />
+
+  <main id="main" class="flex-1 bg-surface-soft py-8">
+    <div class="mx-auto max-w-3xl px-4 sm:px-6">
+      <nav aria-label="Breadcrumb" class="mb-4">
+        <ol class="font-mono-caption flex items-center gap-2 text-mute">
+          <li><a href="/" class="hover:text-primary-strong">Home</a></li>
+          <li aria-hidden="true">/</li>
+          <li class="font-semibold text-ink">Saved</li>
+        </ol>
+      </nav>
+      <h1 class="mb-1 text-3xl font-semibold tracking-tight text-ink sm:text-4xl">Saved articles</h1>
+      <p class="font-mono-caption mb-6 text-mute">
+        Stored on this device only · saving on another browser or device starts a separate list
+      </p>
+
+      <div id="saved-page-empty" hidden>
+        <EmptyState
+          title="Nothing saved yet"
+          description="Look for the Save button on any news card to add it here."
+          actionLabel="Browse the news"
+          actionHref="/news"
+        />
+      </div>
+
+      <div id="saved-page-list" class="grid grid-cols-1 gap-4 sm:grid-cols-2"></div>
+    </div>
+  </main>
+
+  <Footer />
+</Layout>
+
+<script>
+  import { safeHref } from '../lib/url';
+
+  const empty = document.getElementById('saved-page-empty');
+  const list = document.getElementById('saved-page-list');
+
+  function render() {
+    if (!list || !empty) return;
+    const saved = window.NZ.getSaved();
+    empty.hidden = saved.length > 0;
+    list.replaceChildren();
+
+    for (const article of saved) {
+      const href = safeHref(article.href);
+
+      const card = document.createElement('div');
+      card.className = 'rounded-sm border border-hairline bg-surface-elevated p-4';
+
+      // An unsafe href (article.href is attacker-writable via any XSS on the
+      // origin, per SavedArticlesDrawer.astro's S-12 note) still shows the
+      // headline; it is just not turned into a clickable link.
+      const title = document.createElement(href ? 'a' : 'p');
+      title.className = 'mb-2 block text-sm font-semibold text-ink';
+      title.textContent = article.headline;
+      if (href && title instanceof HTMLAnchorElement) {
+        title.href = href;
+        title.target = '_blank';
+        title.rel = 'noopener noreferrer';
+        title.classList.add('hover:text-primary-strong');
+      }
+
+      const removeBtn = document.createElement('button');
+      removeBtn.type = 'button';
+      removeBtn.className =
+        'min-h-11 cursor-pointer border-none bg-transparent p-0 text-xs font-medium text-primary-strong';
+      removeBtn.textContent = 'Remove';
+      removeBtn.addEventListener('click', () => window.NZ.toggleSaved(article.href, article.headline));
+
+      card.appendChild(title);
+      card.appendChild(removeBtn);
+      list.appendChild(card);
+    }
+  }
+
+  window.addEventListener('nz-saved-changed', render);
+  render();
+</script>

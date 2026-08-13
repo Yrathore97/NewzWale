@@ -1,0 +1,169 @@
+---
+/** Primary mobile navigation — five destinations, Fact Check centred.
+ *
+ *  Replaces the `hidden sm:flex` floating "Verify a claim" CTA that used to sit
+ *  in Layout.astro: it was hidden on exactly the screens where the product's
+ *  differentiator matters most (NEWZWALE_UI_UX_SPEC §3.1).
+ *
+ *  Hidden from `lg` up, where the header carries the same five destinations, so
+ *  the two experiences do not diverge conceptually (DESIGN_DIRECTION §7).
+ *
+ *  Geometry: 56px of bar plus `env(safe-area-inset-bottom)` for the iOS home
+ *  indicator. Every tab is a 44x44 minimum target — at 320px five tabs get 64px
+ *  each, so width is never the binding constraint; height is, and it is 56.
+ */
+const path = Astro.url.pathname;
+
+/** A destination is current when the path is inside it. Home is exact — every
+ *  path starts with "/", so a prefix test would light Home up everywhere. */
+function isCurrent(href: string, exact = false): boolean {
+  if (exact) return path === href || path === '';
+  return path === href || path.startsWith(`${href}/`);
+}
+
+const DESTINATIONS = [
+  { href: '/', label: 'Home', exact: true, key: 'home' },
+  { href: '/trending', label: 'Trending', exact: false, key: 'trending' },
+  { href: '/fact-check', label: 'Fact Check', exact: false, key: 'factcheck' },
+  { href: '/search', label: 'Search', exact: false, key: 'search' },
+  { href: '/saved', label: 'You', exact: false, key: 'you' },
+] as const;
+---
+
+<nav
+  id="bottom-nav"
+  aria-label="Primary"
+  class="fixed bottom-0 left-0 right-0 z-[60] border-t border-hairline bg-canvas/98 backdrop-blur-md lg:hidden"
+  style="padding-bottom: env(safe-area-inset-bottom, 0px);"
+>
+  <ul class="mx-auto flex h-14 max-w-[1400px] items-stretch justify-between">
+    {
+      DESTINATIONS.map((d) => {
+        const current = isCurrent(d.href, d.exact);
+        const isFactCheck = d.key === 'factcheck';
+        return (
+          <li class="flex-1">
+            <a
+              href={d.href}
+              aria-current={current ? 'page' : undefined}
+              class:list={[
+                'flex h-full min-h-11 w-full flex-col items-center justify-center gap-0.5 px-1 transition-colors',
+                current ? 'text-primary-strong' : 'text-mute hover:text-ink',
+              ]}
+            >
+              <span
+                class:list={[
+                  'flex items-center justify-center',
+                  // The differentiator gets visual weight: a filled coral disc
+                  // rather than a bare glyph. Not a badge, not a label change —
+                  // weight, so it reads as the centre of the bar.
+                  isFactCheck &&
+                    'h-8 w-8 rounded-full bg-primary-strong text-on-primary shadow-stacked-sm',
+                ]}
+              >
+                {d.key === 'home' && (
+                  <svg
+                    class="h-5 w-5"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    aria-hidden="true"
+                  >
+                    <path
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      d="M3 10.5 12 3l9 7.5V20a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"
+                    />
+                  </svg>
+                )}
+                {d.key === 'trending' && (
+                  <svg
+                    class="h-5 w-5"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    aria-hidden="true"
+                  >
+                    <path stroke-linecap="round" stroke-linejoin="round" d="m3 17 6-6 4 4 8-8" />
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M15 7h6v6" />
+                  </svg>
+                )}
+                {d.key === 'factcheck' && (
+                  <svg
+                    class="h-[18px] w-[18px]"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2.5"
+                    aria-hidden="true"
+                  >
+                    <path stroke-linecap="round" stroke-linejoin="round" d="m2 13 4 4 8-8" />
+                    <path stroke-linecap="round" stroke-linejoin="round" d="m11 13 3 3 8-8" />
+                  </svg>
+                )}
+                {d.key === 'search' && (
+                  <svg
+                    class="h-5 w-5"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    aria-hidden="true"
+                  >
+                    <circle cx="11" cy="11" r="7" />
+                    <path stroke-linecap="round" d="m20 20-3.5-3.5" />
+                  </svg>
+                )}
+                {d.key === 'you' && (
+                  <svg
+                    class="h-5 w-5"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    aria-hidden="true"
+                  >
+                    <circle cx="12" cy="8" r="3.5" />
+                    <path stroke-linecap="round" d="M5 20a7 7 0 0 1 14 0" />
+                  </svg>
+                )}
+              </span>
+
+              <span class="text-[10px] font-medium leading-none">
+                {d.label}
+                {d.key === 'you' && (
+                  <>
+                    {/* Rendered as text, not a coloured dot: a count is
+                        information and must survive both CVD and a screen
+                        reader. Hidden at zero rather than showing "(0)". */}
+                    <span data-saved-count-badge hidden>
+                      {' '}
+                      (<span data-saved-count>0</span>)
+                    </span>
+                  </>
+                )}
+              </span>
+            </a>
+          </li>
+        );
+      })
+    }
+  </ul>
+</nav>
+
+<script>
+  // The saved count is written by the shared refreshSaveButtons() in
+  // Layout.astro, which sets [data-saved-count]. This only decides whether the
+  // wrapper is shown at all, so "You" never reads "You (0)".
+  function syncSavedBadge() {
+    const count = window.NZ?.getSaved().length ?? 0;
+    for (const el of document.querySelectorAll<HTMLElement>('[data-saved-count-badge]')) {
+      el.hidden = count === 0;
+    }
+  }
+
+  window.addEventListener('nz-saved-changed', syncSavedBadge);
+  syncSavedBadge();
+</script>

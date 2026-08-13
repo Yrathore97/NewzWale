@@ -27,8 +27,26 @@ describe('parseTavilyResults', () => {
       title: 'India GDP grows 7.2% in Q1',
       url: 'https://reuters.com/a',
       snippet: 'Official data showed the economy expanded 7.2 percent.',
+      // Tavily supplied no published_date on this result. NULL, never the
+      // fetch time — and ranked lowest even when present, since it is a third
+      // party's assertion about the publisher's date.
+      publishedAt: null,
     });
     expect(out[1].url).toBe('https://pib.gov.in/b');
+  });
+
+  it('carries a provider-supplied date through when Tavily gives one', () => {
+    const out = parseTavilyResults({
+      results: [
+        {
+          title: 'A',
+          url: 'https://a.example/1',
+          content: 'text',
+          published_date: '2026-08-06T00:00:00Z',
+        },
+      ],
+    });
+    expect(out[0]!.publishedAt).toBe('2026-08-06T00:00:00Z');
   });
 
   it('returns [] for malformed or empty responses', () => {
@@ -50,12 +68,12 @@ describe('parseTavilyResults', () => {
         'garbage',
       ],
     });
-    expect(out).toEqual([{ title: 'Has no content', url: 'https://ok.com/x', snippet: '' }]);
+    expect(out).toEqual([{ title: 'Has no content', url: 'https://ok.com/x', snippet: '', publishedAt: null }]);
   });
 
   it('coerces non-string field values rather than leaking them through', () => {
     const out = parseTavilyResults({ results: [{ url: 'https://n.com/1', title: 42, content: 7 }] });
-    expect(out).toEqual([{ title: '42', url: 'https://n.com/1', snippet: '7' }]);
+    expect(out).toEqual([{ title: '42', url: 'https://n.com/1', snippet: '7', publishedAt: null }]);
   });
 });
 
@@ -73,7 +91,7 @@ describe('search', () => {
 
     const out = await search('test-key', 'is the sky blue');
 
-    expect(out).toEqual([{ title: 'A', url: 'https://a.com', snippet: 'snippet a' }]);
+    expect(out).toEqual([{ title: 'A', url: 'https://a.com', snippet: 'snippet a', publishedAt: null }]);
 
     const [url, init] = fetchMock.mock.calls[0];
     expect(url).toBe('https://api.tavily.com/search');

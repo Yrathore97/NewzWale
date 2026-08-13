@@ -1,0 +1,55 @@
+---
+/** What could NOT be established.
+ *
+ *  ALWAYS RENDERED, NEVER EMPTY (UI/UX spec §5.4). A fact-checking product
+ *  that lists only what it knows is marketing, and readers of a fact-checking
+ *  product will price it as such. When the pipeline reports no specific
+ *  limitations, the panel still states the standing ones — they are true of
+ *  every check this system performs.
+ */
+interface Props {
+  /** The live pipeline result carries an array (one item per deterministic
+   *  downgrade); the persisted record carries one flattened string. Both are
+   *  accepted so this panel renders identically on the live check and the
+   *  permalink page. */
+  limitations?: string[] | string | null;
+  basis?: string | null;
+  class?: string;
+}
+
+const { limitations, basis, class: extraClass = '' } = Astro.props;
+
+const specific = (Array.isArray(limitations) ? limitations : limitations ? [limitations] : []).filter(
+  (l) => typeof l === 'string' && l.trim() !== '',
+);
+
+/** True of every check, regardless of outcome. */
+const STANDING = [
+  'Sources were read at the time of the check; a page can change afterwards.',
+  'Coverage is limited to sources reachable and readable from the public web.',
+];
+
+const basisNote =
+  basis === 'certified'
+    ? 'This verdict follows a published fact-checker’s own rating.'
+    : basis === 'ai_assessment'
+      ? 'This is an AI assessment over the sources listed above, not a certified fact-check.'
+      : 'Nothing was established, so no verdict is asserted.';
+---
+
+<section
+  class:list={[
+    'rounded-sm border border-hairline bg-surface-soft p-4 sm:p-5',
+    extraClass,
+  ]}
+  aria-labelledby="limitations-heading"
+>
+  <h2 id="limitations-heading" class="text-base font-semibold text-ink">Limitations</h2>
+
+  <p data-limitations-basis class="mt-1.5 text-sm leading-relaxed text-body">{basisNote}</p>
+
+  <ul class="mt-3 flex list-disc flex-col gap-1.5 pl-5 text-sm leading-relaxed text-body">
+    {specific.map((l) => <li data-limitation>{l}</li>)}
+    {STANDING.map((l) => <li>{l}</li>)}
+  </ul>
+</section>

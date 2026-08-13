@@ -20,6 +20,12 @@ export interface SearchHit {
   title: string;
   url: string;
   snippet: string;
+  /** Date the provider claims for the page, where it supplies one.
+   *
+   *  Ranked LOWEST by extractPublicationDate: it is a third party's assertion
+   *  about when the publisher published, not the publisher's own markup. Used
+   *  only when the page itself carries no date. */
+  publishedAt?: string | null;
 }
 
 const ENDPOINT = 'https://api.tavily.com/search';
@@ -33,6 +39,7 @@ export function parseTavilyResults(raw: any): SearchHit[] {
       title: String(r.title),
       url: String(r.url),
       snippet: String(r.content ?? ''),
+      publishedAt: typeof r.published_date === 'string' ? r.published_date : null,
     }));
 }
 

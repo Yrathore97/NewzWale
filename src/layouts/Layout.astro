@@ -1,10 +1,17 @@
 ---
 import '../styles/global.css';
+import { DEFAULT_LANGUAGE, languageDir } from '../lib/news/languages';
+import BottomNav from '../components/shell/BottomNav.astro';
 
 interface Props {
   title?: string;
   description?: string;
   image?: string;
+  /** Content language of this page. Drives <html lang> and <html dir>, so a
+   *  Hindi or Urdu feed is announced correctly instead of being read with
+   *  English phonetics (audit A-01). Pages with no language-specific content
+   *  leave this at the default. */
+  lang?: string;
 }
 
 const SITE = 'https://www.newzwale.com';
@@ -12,14 +19,17 @@ const SITE = 'https://www.newzwale.com';
 const {
   title = 'NewzWale | Only Facts News',
   description = 'Live Indian news headlines, plus a fact-check tool that checks claims against published fact-checkers and real sources before returning a verdict.',
-  image = `${SITE}/web-app-manifest-512x512.png`
+  image = `${SITE}/web-app-manifest-512x512.png`,
+  lang = DEFAULT_LANGUAGE
 } = Astro.props;
+
+const dir = languageDir(lang);
 
 const canonicalURL = new URL(Astro.url.pathname, Astro.site || SITE);
 ---
 
 <!doctype html>
-<html lang="en" class="scroll-smooth">
+<html lang={lang} dir={dir} class="scroll-smooth">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -115,7 +125,12 @@ const canonicalURL = new URL(Astro.url.pathname, Astro.site || SITE);
       }
     ])} />
   </head>
-  <body class="bg-surface-soft text-ink min-h-screen flex flex-col antialiased transition-colors duration-200">
+  <!-- The bottom padding clears the fixed BottomNav (56px + the iOS home
+       indicator) so the last card of a feed is never trapped underneath it. It
+       is dropped from lg up, where the bar is not rendered. -->
+  <body
+    class="bg-surface-soft text-ink min-h-screen flex flex-col antialiased transition-colors duration-200 pb-[calc(3.5rem+env(safe-area-inset-bottom,0px))] lg:pb-0"
+  >
     <a
       href="#main"
       class="sr-only focus:not-sr-only focus:fixed focus:top-3 focus:left-3 focus:z-[100] focus:px-4 focus:py-2 focus:bg-ink focus:text-canvas focus:rounded-md focus:shadow-stacked-md"
@@ -129,63 +144,16 @@ const canonicalURL = new URL(Astro.url.pathname, Astro.site || SITE);
     ></div>
 <script>
       // Shared save/topics state, backed by localStorage, shared across every
-      // component via window.NZ - each .astro <script> is its own module
-      // scope, so this is the one place the read/write logic lives.
-      const SAVE_KEY = 'nz_saved';
-      const TOPICS_KEY = 'nz_topics';
-      const DEFAULT_TOPICS = ['Sports', 'Business', 'Technology', 'Health'];
-
-      interface SavedArticle {
-        href: string;
-        headline: string;
-      }
-
-      function getSaved(): SavedArticle[] {
-        try {
-          return JSON.parse(localStorage.getItem(SAVE_KEY) || '[]');
-        } catch {
-          return [];
-        }
-      }
-
-      function setSaved(list: SavedArticle[]) {
-        localStorage.setItem(SAVE_KEY, JSON.stringify(list));
-        window.dispatchEvent(new CustomEvent('nz-saved-changed', { detail: { list } }));
-      }
-
-      function isSaved(href: string): boolean {
-        return getSaved().some((a) => a.href === href);
-      }
-
-      function toggleSaved(href: string, headline: string): boolean {
-        const list = getSaved();
-        const exists = list.some((a) => a.href === href);
-        const next = exists ? list.filter((a) => a.href !== href) : [...list, { href, headline }];
-        setSaved(next);
-        return !exists;
-      }
-
-      function getTopics(): string[] {
-        try {
-          const raw = localStorage.getItem(TOPICS_KEY);
-          return raw ? JSON.parse(raw) : DEFAULT_TOPICS.slice();
-        } catch {
-          return DEFAULT_TOPICS.slice();
-        }
-      }
-
-      function setTopics(list: string[]) {
-        localStorage.setItem(TOPICS_KEY, JSON.stringify(list));
-        window.dispatchEvent(new CustomEvent('nz-topics-changed', { detail: { list } }));
-      }
-
-      function toggleTopic(name: string): boolean {
-        const list = getTopics();
-        const has = list.includes(name);
-        const next = has ? list.filter((t) => t !== name) : [...list, name];
-        setTopics(next);
-        return !has;
-      }
+      // component via window.NZ. The read/write logic lives in src/lib/saved.ts
+      // (extracted from here so its malformed-storage guards are unit-tested);
+      // this block is the DOM wiring that binds it to window.NZ and the buttons.
+      import {
+        getSaved,
+        toggleSaved,
+        isSaved,
+        getTopics,
+        toggleTopic,
+      } from '../lib/saved';
 
       declare global {
         interface Window {
@@ -257,14 +225,101 @@ const canonicalURL = new URL(Astro.url.pathname, Astro.site || SITE);
 
     <slot />
 
-    <a
-      href="/verify"
-      class="hidden sm:flex fixed bottom-5 right-5 z-[80] px-5 py-3.5 bg-primary-strong hover:bg-primary-pressed text-on-primary text-sm font-semibold rounded-full shadow-stacked-lg transition-colors items-center gap-1.5 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ink"
-    >
-      Verify a claim →
-    </a>
+    <BottomNav />
 
-    
+    <!-- P9 install prompt. Hidden until the browser fires
+         `beforeinstallprompt`, which it only does when the app is actually
+         installable, so this markup is inert on desktop Safari and on an
+         already-installed instance. Sits above the BottomNav rather than over
+         it, so it never covers a navigation target. -->
+    <div
+      id="nz-install"
+      hidden
+      role="region"
+      aria-label="Install NewzWale"
+      class="fixed inset-x-3 bottom-[calc(3.5rem+env(safe-area-inset-bottom,0px)+0.75rem)] z-[70] flex flex-col gap-3 rounded-md border border-hairline bg-surface-elevated p-4 shadow-stacked-md sm:inset-x-auto sm:right-4 sm:max-w-sm lg:bottom-4"
+    >
+      <p class="text-sm leading-snug text-ink">
+        Install NewzWale for a full-screen app and faster launches.
+      </p>
+      <div class="flex items-center gap-2">
+        <button type="button" id="nz-install-accept" class="btn-pill-primary min-h-11 px-5 text-sm">
+          Install
+        </button>
+        <button
+          type="button"
+          id="nz-install-dismiss"
+          class="min-h-11 cursor-pointer border-none bg-transparent px-3 text-sm font-medium text-mute hover:text-ink"
+        >
+          Not now
+        </button>
+      </div>
+    </div>
+
+    <script>
+      // P9: service-worker registration and the install prompt.
+      //
+      // public/sw.js is served verbatim from public/ and is a classic worker,
+      // so it is registered by path rather than imported. Registration is
+      // deferred to `load` so it never competes with the first paint.
+      if ('serviceWorker' in navigator) {
+        window.addEventListener('load', () => {
+          navigator.serviceWorker.register('/sw.js', { scope: '/' }).catch(() => {
+            // A failed registration is not a page error. The site works
+            // without the worker; that is the entire point of the design.
+          });
+        });
+      }
+
+      // The prompt is shown ONCE per device (§Phase 9 Tests: "install prompt
+      // appears once"). Both accepting and dismissing set the flag, because a
+      // banner that returns after being declined is the thing everybody hates.
+      const INSTALL_KEY = 'nz_install_prompted';
+      const panel = document.getElementById('nz-install');
+      const accept = document.getElementById('nz-install-accept');
+      const dismiss = document.getElementById('nz-install-dismiss');
+
+      let deferredPrompt: (Event & { prompt(): Promise<void> }) | null = null;
+
+      function markPrompted() {
+        try {
+          localStorage.setItem(INSTALL_KEY, '1');
+        } catch {
+          // Storage disabled or full. The banner just reappears next visit,
+          // which is a nuisance, not a failure worth throwing over.
+        }
+        if (panel) panel.hidden = true;
+      }
+
+      function alreadyPrompted(): boolean {
+        try {
+          return localStorage.getItem(INSTALL_KEY) === '1';
+        } catch {
+          return false;
+        }
+      }
+
+      window.addEventListener('beforeinstallprompt', (e) => {
+        // Suppress the browser's own mini-infobar so there is one prompt, not
+        // two competing ones.
+        e.preventDefault();
+        if (alreadyPrompted() || !panel) return;
+        deferredPrompt = e as Event & { prompt(): Promise<void> };
+        panel.hidden = false;
+      });
+
+      accept?.addEventListener('click', () => {
+        const prompt = deferredPrompt;
+        deferredPrompt = null;
+        markPrompted();
+        prompt?.prompt();
+      });
+
+      dismiss?.addEventListener('click', markPrompted);
+
+      // Installed by any route (the browser menu, a shortcut): stop offering.
+      window.addEventListener('appinstalled', markPrompted);
+    </script>
 
     <script>
       // Full-page navigations (category links, pagination, language switch)

@@ -1,0 +1,105 @@
+---
+import Layout from '../../layouts/Layout.astro';
+import Navbar from '../../components/Navbar.astro';
+import MastheadInfoStrip from '../../components/MastheadInfoStrip.astro';
+import FactCheckWidget from '../../components/FactCheckWidget.astro';
+import Footer from '../../components/Footer.astro';
+
+// P5 / D8: the checker, renamed from /verify (permanent 301 at
+// src/pages/verify.astro). Content is verify.astro's, minus the methodology
+// section — that is now its own route at /methodology per
+// NEWZWALE_ARCHITECTURE.md §4.1 and audit finding P-22 — plus a link to it.
+// The FAQ section's destination was not documented anywhere in the plan, so
+// it is preserved here rather than dropped, per instruction.
+export const prerender = false;
+---
+
+<Layout
+  title="Fact Check Explorer India - Fact Check Status True & News Verification | NewzWale"
+  description="Check viral WhatsApp forwards, headlines, and article URLs against published fact-checkers and live web sources. Returns a cited verdict, or says the evidence is insufficient."
+>
+  <Navbar />
+  <MastheadInfoStrip />
+
+  <main id="main" class="flex-1 py-8 bg-surface-soft">
+    <div class="max-w-[1400px] mx-auto px-4 sm:px-6 mb-4">
+      <nav aria-label="Breadcrumb">
+        <ol class="flex items-center gap-2 text-xs text-mute font-mono-caption">
+          <li><a href="/" class="hover:text-primary-strong">Home</a></li>
+          <li aria-hidden="true">/</li>
+          <li class="text-ink font-semibold">Fact Check</li>
+        </ol>
+      </nav>
+    </div>
+    <div class="max-w-[1400px] mx-auto px-4 sm:px-6 mb-8">
+      <div class="bg-surface-dark text-canvas dark:text-ink rounded-lg p-8 sm:p-12 relative overflow-hidden shadow-stacked-lg border border-transparent">
+        <div class="absolute -right-20 -top-20 w-[400px] h-[400px] mesh-gradient-glow opacity-30 pointer-events-none"></div>
+        <div class="relative z-10 max-w-3xl">
+          <span class="inline-block px-3 py-1 bg-primary-strong text-on-primary font-mono-caption text-[11px] rounded-full mb-4 font-bold">
+            PUBLIC AUDIT ENGINE
+          </span>
+          <h1 class="text-3xl sm:text-5xl font-semibold tracking-[-1.5px] leading-tight mb-4">
+            AI News Verification & Credibility Portal.
+          </h1>
+          <p class="text-base text-stone dark:text-body leading-relaxed">
+            Verify headlines, viral claims, or article URLs. Our engine checks published fact-checkers first, then live web sources, and only issues a verdict when the evidence supports one — otherwise it says so.
+            <a href="/methodology" class="underline hover:no-underline">How this works →</a>
+          </p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Embedded Fact Check Tool Widget -->
+    <FactCheckWidget />
+
+    <p class="max-w-4xl mx-auto px-4 sm:px-6 -mt-4 mb-8 text-sm">
+      <a href="/methodology" class="text-primary-strong font-semibold hover:underline">Read the full verification methodology →</a>
+    </p>
+
+    <!-- FAQ -->
+    <section id="faq" class="w-full py-12 bg-surface-soft border-t border-hairline">
+      <div class="max-w-4xl mx-auto px-4 sm:px-6">
+        <span class="font-mono-caption text-primary-strong mb-2 block font-semibold">FACT CHECKING GUIDES</span>
+        <h2 class="text-2xl font-semibold text-ink tracking-tight mb-6">
+          Frequently Asked Questions
+        </h2>
+
+        <div class="space-y-3">
+          {[
+            {
+              q: 'How do I fact check something myself?',
+              a: 'Follow five steps: identify the core claim, its date, and its original publisher; search primary sources such as government records or statistical databases; run a reverse image or video search on any attached media; read laterally across multiple independent outlets; and only then summarize your findings with evidence links.',
+            },
+            {
+              q: 'How do I fact check on Google?',
+              a: 'Use search operators like site:gov.in or filetype:pdf, run Google Images or Google Lens reverse search on photos, and check Google Fact Check Explorer (toolbox.google.com/factcheck/explorer) for existing reviews. Cross-reference against multiple independent outlets before trusting a single result.',
+            },
+            {
+              q: 'How do I fact check a photo or video?',
+              a: 'Upload the image, or a clear keyframe from the video, to Google Lens or TinEye to find where and when it first appeared. Check image metadata (EXIF) for capture time and location where available, and look for signs of editing such as inconsistent lighting or warped detail.',
+            },
+            {
+              q: 'How do I fact check a social media or WhatsApp forward?',
+              a: "Don't share before checking. Search the exact wording in Google, check the account or number that originated it, run a reverse image search on any attached photo, and look for an existing debunk before treating it as news.",
+            },
+            {
+              q: 'Is Media Bias/Fact Check reliable?',
+              a: 'MBFC is a useful independent reference for how outlets lean editorially and their sourcing track record. Treat it as one input among several — combine it with IFCN-affiliated fact-checker reviews and primary-source verification rather than relying on it alone.',
+            },
+          ].map((item) => (
+            <details class="group p-4 bg-surface-card border border-hairline rounded-md">
+              <summary class="cursor-pointer font-semibold text-ink text-sm list-none flex items-center justify-between">
+                {item.q}
+                <span class="text-mute group-open:rotate-45 transition-transform">+</span>
+              </summary>
+              <p class="mt-2 text-sm text-body leading-relaxed">{item.a}</p>
+            </details>
+          ))}
+        </div>
+      </div>
+    </section>
+
+  </main>
+
+  <Footer />
+</Layout>

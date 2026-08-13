@@ -1,0 +1,74 @@
+---
+/** Staged progress — real stages, never a percentage.
+ *
+ *  HONEST BY CONSTRUCTION, and here is the constraint that shapes it:
+ *  /api/v1/factcheck is a single POST that returns when the whole pipeline has
+ *  finished. The browser cannot observe intermediate stages, because the server
+ *  does not stream them. So this component does NOT animate ticks against a
+ *  timer — that would be a fake progress bar wearing stage labels, which is
+ *  exactly what Part 10 forbids.
+ *
+ *  Instead: one honest running state while the request is in flight, then every
+ *  stage resolved from the RESPONSE — what was actually found, read, and
+ *  weighed. A stage that did not run is marked skipped, not ticked.
+ *
+ *  Documented limitation: per-stage timings are not shown, because we do not
+ *  have them. When the API gains streaming, the same markup can fill in live.
+ */
+interface Props {
+  class?: string;
+}
+
+const { class: extraClass = '' } = Astro.props;
+
+/** Stage ids match what the client can genuinely determine from the result. */
+const STAGES = [
+  { id: 'certified', label: 'Checking published fact-checkers' },
+  { id: 'search', label: 'Searching live sources' },
+  { id: 'read', label: 'Reading sources' },
+  { id: 'weigh', label: 'Weighing evidence' },
+  { id: 'verdict', label: 'Forming a verdict' },
+];
+---
+
+<div
+  id="check-progress"
+  hidden
+  class:list={['rounded-sm border border-hairline bg-surface-soft p-4', extraClass]}
+>
+  {/* polite, not assertive: stage updates are progress, not an emergency, and
+      assertive would interrupt whatever the reader is doing. */}
+  <p id="check-progress-live" role="status" aria-live="polite" class="sr-only"></p>
+
+  <ol class="flex flex-col gap-2">
+    {
+      STAGES.map((s) => (
+        <li
+          data-stage={s.id}
+          data-state="pending"
+          class="flex items-start gap-2.5 text-sm text-mute"
+        >
+          <span data-stage-icon aria-hidden="true" class="font-mono leading-6">
+            ○
+          </span>
+          <span class="flex flex-col">
+            <span data-stage-label class="leading-6">{s.label}</span>
+            {/* Filled from the response with what actually happened, e.g.
+                "5 sources found", "3 read in full, 2 snippet only". */}
+            <span data-stage-detail class="font-mono-caption text-mute" />
+          </span>
+        </li>
+      ))
+    }
+  </ol>
+</div>
+
+<style>
+  [data-stage][data-state='running'] [data-stage-label],
+  [data-stage][data-state='done'] [data-stage-label] {
+    color: var(--color-ink);
+  }
+  [data-stage][data-state='skipped'] [data-stage-label] {
+    text-decoration: line-through;
+  }
+</style>

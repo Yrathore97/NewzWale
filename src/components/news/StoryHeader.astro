@@ -1,0 +1,76 @@
+---
+import type { ApiArticle } from '../../lib/news/read';
+import { formatPublished } from '../../lib/news/feed';
+import { safeHref } from '../../lib/url';
+import ReadingTime from './ReadingTime.astro';
+import FactCheckChip from './FactCheckChip.astro';
+
+/** Story page masthead — breadcrumb, dateline, headline, hero image.
+ *
+ *  Per AD-09 and NEWZWALE_UI_UX_SPEC §4.3. The dateline order is fixed
+ *  (CATEGORY · publisher · timestamp · reading time) so the eye learns it once.
+ */
+interface Props {
+  article: ApiArticle;
+  /** Verdict of a completed check on a claim from this story, if any. */
+  verdict?: string | null;
+  factCheckHref?: string | null;
+}
+
+const { article, verdict, factCheckHref } = Astro.props;
+
+const heroUrl = article.imageUrl ? safeHref(article.imageUrl) : null;
+---
+
+<header class="flex flex-col gap-4">
+  <nav aria-label="Breadcrumb">
+    <ol class="font-mono-caption flex flex-wrap items-center gap-1.5 text-mute">
+      <li><a href="/" class="hover:text-ink">Home</a></li>
+      <li aria-hidden="true">/</li>
+      <li><a href="/news" class="hover:text-ink">News</a></li>
+      <li aria-hidden="true">/</li>
+      <li>
+        <a href={`/news?category=${encodeURIComponent(article.category)}`} class="capitalize hover:text-ink">
+          {article.category}
+        </a>
+      </li>
+    </ol>
+  </nav>
+
+  <p class="font-mono-caption flex flex-wrap items-center gap-x-2 gap-y-1 text-mute">
+    <span class="uppercase text-primary-strong">{article.category}</span>
+    <span aria-hidden="true">·</span>
+    <span>{article.source}</span>
+    <span aria-hidden="true">·</span>
+    {/* Nullable by design. An unknown publication date is stated, never
+        replaced with the time we happened to ingest it. */}
+    <span>{article.publishedAt ? formatPublished(article.publishedAt) : 'Date unknown'}</span>
+    <ReadingTime text={article.summary} />
+  </p>
+
+  <h1 class="text-2xl font-semibold leading-tight tracking-[-0.8px] text-ink sm:text-3xl lg:text-4xl">
+    {article.title}
+  </h1>
+
+  {verdict && (
+    <div>
+      <FactCheckChip verdict={verdict} href={factCheckHref} />
+    </div>
+  )}
+
+  {
+    heroUrl && (
+      <div class="aspect-[16/9] w-full overflow-hidden rounded-sm bg-surface-card">
+        <img
+          src={heroUrl}
+          alt=""
+          width={1200}
+          height={675}
+          loading="eager"
+          decoding="async"
+          class="h-full w-full object-cover"
+        />
+      </div>
+    )
+  }
+</header>

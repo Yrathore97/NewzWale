@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+@import "./fonts.css";
 @import "tailwindcss";
 
 /* Enable class-based dark mode in Tailwind v4 for html.dark */
@@ -57,6 +57,26 @@
   --color-success: #2f7d4f;
   --color-error: #c0392b;
   --color-warning: #a86a1c;
+
+  /* Verdict extensions - the ONLY two colours added in P6.
+     Six verdicts need six treatments and the palette shipped three status
+     colours. TRUE reuses success, FALSE reuses error, PARTLY_TRUE reuses
+     warning, UNVERIFIED reuses mute. That leaves MISLEADING (orange) and
+     NEEDS_CONTEXT (blue) with nothing to reuse.
+
+     Both values were chosen by measuring, not by eye, and every pairing against
+     canvas / surface-soft / surface-card / surface-elevated in both themes is
+     asserted in tests/contrast.test.ts.
+
+     MISLEADING sits ~2 hue steps from PARTLY_TRUE's amber and the pair is the
+     most meaning-dense distinction in the product (facts wrong vs framing
+     wrong). They measure 1.24:1 against each other, so hue CANNOT carry that
+     distinction - roughly 8% of Indian men have red-green CVD, for whom the two
+     collapse entirely. The distinction is carried by FORM instead: PARTLY_TRUE
+     is a solid-filled icon chip with a 1px border, MISLEADING is an unfilled
+     2px border, and the glyphs differ. See .verdict-* below. */
+  --color-verdict-misleading: #a8500f;
+  --color-verdict-context: #1a5fb4;
 
   /* Type */
   --font-sans: 'Inter', system-ui, -apple-system, sans-serif;
@@ -140,6 +160,9 @@ html.dark {
   --color-success: #6ec48f;
   --color-error: #f08a7d;
   --color-warning: #e0b070;
+
+  --color-verdict-misleading: #f0a868;
+  --color-verdict-context: #8ab4f8;
 }
 
 body {

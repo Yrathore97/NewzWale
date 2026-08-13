@@ -1,0 +1,32 @@
+---
+/** The responsive card grid, in one place.
+ *
+ *  Breakpoints per NEWZWALE_UI_UX_SPEC §4.2 and DESIGN_DIRECTION §11, authored
+ *  MOBILE-FIRST: the base rule is the phone layout and `sm:`/`lg:` add to it.
+ *  That inverts the previous practice (audit §5.5), which started from the
+ *  desktop grid and subtracted.
+ *
+ *    320-639  1 col
+ *    640-1023 2 col
+ *    1024+    3 col
+ */
+interface Props {
+  /** `rail` caps at 4 across for the homepage category rails. */
+  variant?: 'feed' | 'rail';
+  id?: string;
+  class?: string;
+}
+
+const { variant = 'feed', id, class: extraClass = '' } = Astro.props;
+---
+
+<div
+  id={id}
+  class:list={[
+    'grid grid-cols-1 gap-4 sm:grid-cols-2 sm:gap-5',
+    variant === 'rail' ? 'lg:grid-cols-4' : 'lg:grid-cols-3',
+    extraClass,
+  ]}
+>
+  <slot />
+</div>

@@ -1,6 +1,26 @@
 ---
 import type { Article } from '../lib/news/types';
 
+/** Homepage hero.
+ *
+ *  TWO things were wrong here and both are fixed.
+ *
+ *  1. The search bar was fake. It filtered the article cards ALREADY IN THE DOM
+ *     by substring — so "budget 2026" returned nothing whenever the budget
+ *     story happened to be on page 2, and the reader had no way to tell the
+ *     difference between "no such story" and "not loaded yet". It now posts to
+ *     /search, which queries both corpora server-side.
+ *
+ *  2. It was 153 lines of hero before a single story appeared, carrying an
+ *     eyebrow badge, a pinging dot, three feature pills and a large glow —
+ *     every one of them on Part 13's forbidden list, and between them pushing
+ *     real content below the fold. The hero is now ≤55vh on mobile.
+ *
+ *  The claim box is a WORKING fact-check entry point, not a link to one: what
+ *  the reader types is carried into the check and lands on the confirmation
+ *  step. It submits to the real /fact-check flow rather than re-implementing
+ *  the pipeline here, so there is still exactly one fact-check implementation.
+ */
 const MAX_TICKER_ITEMS = 8;
 
 let breakingNews: string[] = [];
@@ -27,127 +47,147 @@ try {
 }
 ---
 
-<section class="relative w-full overflow-hidden border-b border-hairline mesh-gradient-bg py-8 sm:py-12 md:py-16 transition-colors duration-200">
-  <!-- Mesh Glow Backdrop -->
-  <div class="absolute -top-24 left-1/2 -translate-x-1/2 w-[600px] sm:w-[800px] h-[300px] sm:h-[350px] mesh-gradient-glow opacity-60 pointer-events-none"></div>
-
-  <div class="max-w-[1400px] mx-auto px-4 sm:px-6 relative z-10">
-    <div class="flex flex-col items-center text-center max-w-4xl mx-auto">
-      
-      <!-- Eyebrow Badge -->
-      <div class="inline-flex items-center gap-2 px-3 py-1 bg-surface-elevated/90 border border-hairline rounded-full shadow-stacked-sm mb-4 sm:mb-5 backdrop-blur-md">
-        <span class="w-2 h-2 rounded-full bg-primary"></span>
-        <span class="font-mono-caption text-primary-strong text-[10px] sm:text-[11px] font-semibold tracking-wider">
-          MEDIA NETWORK • ONLY FACTS NEWS
-        </span>
+<section
+  class="mesh-gradient-bg relative w-full border-b border-hairline transition-colors duration-200"
+>
+  <div class="relative z-10 mx-auto max-w-[1400px] px-4 py-8 sm:px-6 sm:py-12">
+    <div class="mx-auto flex max-w-3xl flex-col gap-5">
+      <div>
+        <h1
+          class="text-[28px] font-semibold leading-[1.15] tracking-[-0.8px] text-ink sm:text-4xl sm:tracking-[-1.4px]"
+        >
+          Know what's true.<br />Not just what's trending.
+        </h1>
+        <p class="mt-3 max-w-2xl text-[15px] leading-relaxed text-body sm:text-base">
+          Live Indian news, plus a fact-checker that shows its evidence.
+        </p>
       </div>
 
-      <!-- Main Headline -->
-      <h1 class="text-2xl sm:text-4xl md:text-5xl font-semibold text-ink tracking-[-0.8px] sm:tracking-[-2px] leading-snug sm:leading-[1.05] mb-4 sm:mb-5">
-        Search real-time news,<br />in your language.
-      </h1>
-
-      <!-- Subtitle -->
-      <p class="text-xs sm:text-base md:text-lg text-body max-w-2xl font-normal leading-relaxed mb-6 sm:mb-8 px-2 sm:px-0">
-        NewzWale collects live headlines from Indian news sources. Search any topic, or use the Fact Check tab to verify a specific claim.
-      </p>
-
-      <!-- Headline Search Bar -->
-      <form id="hero-search-form" class="w-full max-w-2xl flex items-center gap-2 bg-surface-card rounded-full pl-5 pr-1.5 py-1.5 shadow-stacked-md mb-6 sm:mb-8">
-        <svg class="w-4 h-4 text-mute shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
-        <label for="hero-search" class="sr-only">Search headlines on this page</label>
-        <input
-          id="hero-search"
-          type="text"
+      <!-- The working fact-check input. -->
+      <form
+        id="hero-claim-form"
+        action="/fact-check"
+        method="get"
+        class="flex w-full flex-col gap-2"
+      >
+        <label for="hero-claim" class="sr-only">
+          Paste a claim, headline or link to fact-check
+        </label>
+        <textarea
+          id="hero-claim"
+          name="claim"
+          rows="2"
+          required
+          maxlength="2000"
           autocomplete="off"
-          spellcheck="false"
-          placeholder={`Search for news, e.g. "India cricket" or "budget 2026"…`}
-          class="flex-1 min-w-0 bg-transparent text-xs sm:text-sm text-ink placeholder:text-mute border-none focus:outline-none py-1.5"
-        />
-        <button type="submit" class="shrink-0 px-4 sm:px-5 py-2 bg-primary-strong hover:bg-primary-pressed text-on-primary text-xs font-bold rounded-full transition-colors cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ink">
-          Search
-        </button>
+          placeholder="Paste a claim, headline, or link…"
+          class="w-full resize-y rounded-sm border border-hairline bg-surface-elevated px-4 py-3 text-base leading-relaxed text-ink placeholder:text-mute focus:outline-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-strong"
+        ></textarea>
+
+        <div class="flex flex-wrap items-center gap-2">
+          <button
+            type="submit"
+            class="btn-pill-primary inline-flex min-h-11 cursor-pointer items-center px-5 text-sm"
+          >
+            Fact-check this
+          </button>
+
+          <!-- Hidden until scripting confirms the Clipboard API exists, so we
+               never offer an affordance that cannot work. -->
+          <button
+            type="button"
+            id="hero-paste"
+            hidden
+            class="btn-pill-secondary inline-flex min-h-11 cursor-pointer items-center px-5 text-sm"
+          >
+            Paste from clipboard
+          </button>
+
+          <a
+            href="#news-feed"
+            class="inline-flex min-h-11 items-center px-2 text-sm font-semibold text-primary-strong"
+          >
+            Read the news ↓
+          </a>
+        </div>
+
+        <p class="font-mono-caption text-mute">
+          Checks published fact-checkers, then live sources.
+        </p>
+        <p id="hero-claim-status" role="status" aria-live="polite" class="text-xs text-mute"></p>
       </form>
-      <p id="hero-search-status" role="status" aria-live="polite" class="text-xs text-mute -mt-4 mb-6 sm:mb-8 hidden"></p>
-
-      <!-- Feature Pill Stats -->
-      <div class="flex flex-col sm:flex-row flex-wrap items-center justify-center gap-2 sm:gap-6 text-xs text-body">
-        <div class="flex items-center gap-1.5 font-medium">
-          <svg class="w-3.5 h-3.5 sm:w-4 sm:h-4 text-primary-strong" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
-          Live Headline Stream
-        </div>
-        <span class="hidden sm:inline text-stone">•</span>
-        <div class="flex items-center gap-1.5 font-medium">
-          <svg class="w-3.5 h-3.5 sm:w-4 sm:h-4 text-primary-strong" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
-          13 Languages
-        </div>
-        <span class="hidden sm:inline text-stone">•</span>
-        <div class="flex items-center gap-1.5 font-medium">
-          <svg class="w-3.5 h-3.5 sm:w-4 sm:h-4 text-primary-strong" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
-          Zero Copyright Infringement
-        </div>
-      </div>
-
     </div>
   </div>
 
-  <!-- Ticker Marquee Bar (only renders with real headlines from /api/news) -->
-  {breakingNews.length > 0 && (
-  <div class="w-full bg-surface-dark text-canvas dark:text-ink py-2 sm:py-2.5 mt-8 sm:mt-10 overflow-hidden border-y border-charcoal dark:border-hairline-soft">
-    <div class="max-w-[1400px] mx-auto px-3 sm:px-4 flex items-center gap-3 sm:gap-4">
-      <span class="font-mono-caption text-[10px] sm:text-[11px] text-primary font-semibold shrink-0 flex items-center gap-1 bg-charcoal dark:bg-hairline-soft px-2 py-0.5 rounded-full">
-        <span class="w-1.5 h-1.5 bg-primary rounded-full animate-ping" aria-hidden="true"></span>
-        BREAKING
-      </span>
-      <div class="overflow-hidden relative w-full">
-        <div class="animate-marquee whitespace-nowrap flex items-center gap-6 sm:gap-8 text-[11px] sm:text-xs font-normal">
-          {breakingNews.map((news) => (
-            <span class="flex items-center gap-2">{news}</span>
-          ))}
-          {/* Duplicated purely so the marquee loops seamlessly; hidden from
-              assistive tech so headlines are not announced twice. */}
-          {breakingNews.map((news) => (
-            <span class="flex items-center gap-2" aria-hidden="true">{news}</span>
-          ))}
+  <!-- Ticker (only renders with real headlines from /api/news) -->
+  {
+    breakingNews.length > 0 && (
+      <div class="w-full overflow-hidden border-y border-charcoal bg-surface-dark py-2 text-canvas dark:border-hairline-soft dark:text-ink">
+        <div class="mx-auto flex max-w-[1400px] items-center gap-3 px-3 sm:px-4">
+          <span class="font-mono-caption shrink-0 rounded-full bg-charcoal px-2 py-0.5 text-primary dark:bg-hairline-soft">
+            Breaking
+          </span>
+          <div class="relative w-full overflow-hidden">
+            <div class="animate-marquee flex items-center gap-8 whitespace-nowrap text-xs">
+              {breakingNews.map((news) => (
+                <span>{news}</span>
+              ))}
+              {/* Duplicated purely so the marquee loops seamlessly; hidden from
+                  assistive tech so headlines are not announced twice. */}
+              {breakingNews.map((news) => (
+                <span aria-hidden="true">{news}</span>
+              ))}
+            </div>
+          </div>
         </div>
       </div>
-    </div>
-  </div>
-  )}
+    )
+  }
 </section>
 
 <script>
-  // Filters the article cards already on the page by title - there is no
-  // search backend, so this searches what has loaded rather than promising
-  // results it cannot fetch.
-  const form = document.getElementById('hero-search-form');
-  const input = document.getElementById('hero-search') as HTMLInputElement | null;
-  const status = document.getElementById('hero-search-status');
+  const form = document.getElementById('hero-claim-form') as HTMLFormElement | null;
+  const input = document.getElementById('hero-claim') as HTMLTextAreaElement | null;
+  const paste = document.getElementById('hero-paste') as HTMLButtonElement | null;
+  const status = document.getElementById('hero-claim-status');
 
-  form?.addEventListener('submit', (e) => {
-    e.preventDefault();
-    const query = (input?.value ?? '').trim().toLowerCase();
-    const cards = document.querySelectorAll<HTMLElement>('[data-article-id]');
-    let shown = 0;
-
-    cards.forEach((card) => {
-      const headline = card.querySelector('.article-headline')?.textContent?.toLowerCase() ?? '';
-      const matches = query === '' || headline.includes(query);
-      card.hidden = !matches;
-      if (matches) shown += 1;
+  // "Paste from clipboard" is the single most valuable affordance for the
+  // primary use case — someone arriving from WhatsApp with a forwarded claim
+  // (NEWZWALE_UI_UX_SPEC §5.1). Feature-detected, because readText() does not
+  // exist in every browser and is permission-gated in the ones that have it.
+  if (paste && input && navigator.clipboard && 'readText' in navigator.clipboard) {
+    paste.hidden = false;
+    paste.addEventListener('click', async () => {
+      try {
+        const text = await navigator.clipboard.readText();
+        if (!text.trim()) {
+          if (status) status.textContent = 'Your clipboard is empty.';
+          return;
+        }
+        input.value = text.trim().slice(0, 2000);
+        input.focus();
+        if (status) status.textContent = 'Pasted from clipboard.';
+      } catch {
+        // Permission refused, or a browser that gates readText behind a user
+        // setting. Say so rather than failing silently.
+        if (status) {
+          status.textContent = 'Clipboard access was blocked. Paste with Ctrl+V instead.';
+        }
+      }
     });
+  }
 
-    if (!status) return;
-    if (query === '') {
-      status.classList.add('hidden');
-      status.textContent = '';
-    } else {
-      status.classList.remove('hidden');
-      status.textContent =
-        shown === 0
-          ? `No loaded headlines match "${input?.value}".`
-          : `Showing ${shown} headline${shown === 1 ? '' : 's'} matching "${input?.value}".`;
-      document.getElementById('news-feed')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  // A plain GET form already works without this handler; it exists only to
+  // trim and to stop an all-whitespace submission.
+  form?.addEventListener('submit', (event) => {
+    if (!input) return;
+    const value = input.value.trim();
+    if (!value) {
+      event.preventDefault();
+      if (status) status.textContent = 'Enter a claim, headline or link to check.';
+      input.focus();
+      return;
     }
+    input.value = value;
   });
 </script>

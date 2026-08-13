@@ -1,3 +1,5 @@
+import { safeFetchText, SafeFetchError } from '../http';
+
 const MAX_CHARS = 4000;
 
 const ENTITIES: Record<string, string> = {
@@ -15,66 +17,57 @@ export function extractReadableText(html: string): string {
     .slice(0, MAX_CHARS);
 }
 
-function isPrivateIPv4(ip: string): boolean {
-  const parts = ip.split('.').map((p) => Number(p));
-  // Anything that is not four clean octets is not a real address; refuse it
-  // rather than letting an ambiguous form through.
-  if (parts.length !== 4 || parts.some((n) => !Number.isInteger(n) || n < 0 || n > 255)) return true;
-  const [a, b] = parts;
-  if (a === 0) return true; // 0.0.0.0/8, including 0.0.0.0 itself
-  if (a === 127) return true; // 127.0.0.0/8 loopback
-  if (a === 10) return true; // 10.0.0.0/8
-  if (a === 172 && b >= 16 && b <= 31) return true; // 172.16.0.0/12
-  if (a === 192 && b === 168) return true; // 192.168.0.0/16
-  if (a === 169 && b === 254) return true; // 169.254.0.0/16 link-local
-  return false;
+/** Host classification moved to ../url.ts, where it sits beside the scheme and
+ *  href rules as one security boundary instead of three scattered copies.
+ *
+ *  Re-exported here because it is part of this module's established public
+ *  API and is covered by tests/factcheck/extract.test.ts. The implementation
+ *  moved and was hardened (IPv4-mapped IPv6 in hex form, multicast, reserved,
+ *  CGNAT and cloud-metadata ranges); the contract did not change. */
+export { isPrivateHost } from '../url';
+
+export interface ArticleFetchResult {
+  text: string;
+  /** The raw response body, still bounded by safeFetchText's byte cap.
+   *
+   *  Needed because publication dates live in markup (JSON-LD, meta tags,
+   *  <time>) that tag-stripping destroys, and because passage selection works
+   *  on block structure. Handing only stripped text downstream made both
+   *  impossible — the date was gone before anything could look for it. */
+  html: string;
+  /** After redirects. Differs from the requested URL when the page moved. */
+  finalUrl: string;
+  /** True when the byte cap cut the body short. Recorded so evidence can say
+   *  the source was only partially read rather than implying a full read. */
+  truncated: boolean;
 }
 
-/**
- * True when a URL hostname points at a private, loopback, or internal target.
+/** Fetches a page and reduces it to readable text.
  *
- * `fetchArticleText` runs inside the Worker on a URL the caller supplies, so
- * without this an attacker could aim it at internal infrastructure (SSRF).
- * `global_fetch_strictly_public` in wrangler.jsonc blocks this at the platform
- * level too; this is defence in depth plus a legible error message.
- *
- * This is a literal check only. It cannot stop a public hostname whose DNS
- * record resolves to a private address (DNS rebinding) -- the compatibility
- * flag is what covers that case.
- */
-export function isPrivateHost(hostname: string): boolean {
-  // Strip IPv6 brackets and any trailing root dot, then compare lowercased.
-  const host = hostname.trim().toLowerCase().replace(/^\[/, '').replace(/\]$/, '').replace(/\.$/, '');
-  if (!host) return true;
-
-  if (host === 'localhost' || host.endsWith('.localhost')) return true;
-  if (host.endsWith('.local') || host.endsWith('.internal')) return true;
-
-  if (host.includes(':')) {
-    if (host === '::1' || host === '::') return true; // loopback, unspecified
-    // IPv4-mapped / -compatible forms such as ::ffff:127.0.0.1
-    const mapped = host.match(/(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})$/);
-    if (mapped) return isPrivateIPv4(mapped[1]);
-    if (/^f[cd]/.test(host)) return true; // fc00::/7 unique local
-    if (/^fe[89ab]/.test(host)) return true; // fe80::/10 link-local
-    return false;
-  }
-
-  if (/^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(host)) return isPrivateIPv4(host);
-  return false;
+ *  All transport security - scheme allowlist, SSRF host checks on every
+ *  redirect hop, timeout, byte cap, content-type validation - lives in
+ *  `safeFetchText`. This function is only the HTML-to-text step. */
+export async function fetchArticle(url: string): Promise<ArticleFetchResult> {
+  const res = await safeFetchText(url);
+  return {
+    text: extractReadableText(res.text),
+    html: res.text,
+    finalUrl: res.finalUrl,
+    truncated: res.truncated,
+  };
 }
 
+/** Text-only form, kept because it is the existing call shape used by
+ *  /api/factcheck and covered by existing tests.
+ *
+ *  SafeFetchError messages are already safe to surface: they name the host the
+ *  caller supplied and carry no internal network detail. */
 export async function fetchArticleText(url: string): Promise<string> {
-  const parsed = new URL(url);
-  if (parsed.protocol !== 'https:' && parsed.protocol !== 'http:') {
-    throw new Error('Only http and https URLs are supported.');
+  try {
+    const { text } = await fetchArticle(url);
+    return text;
+  } catch (err) {
+    if (err instanceof SafeFetchError) throw new Error(err.message);
+    throw err;
   }
-  if (isPrivateHost(parsed.hostname)) {
-    throw new Error(`Refusing to fetch a private or internal address (${parsed.hostname}).`);
-  }
-  const res = await fetch(parsed.toString(), {
-    headers: { 'user-agent': 'NewzWale-FactCheck/1.0' },
-  });
-  if (!res.ok) throw new Error(`Could not fetch the article (${res.status}).`);
-  return extractReadableText(await res.text());
 }

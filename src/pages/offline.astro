@@ -1,0 +1,57 @@
+---
+import Layout from '../layouts/Layout.astro';
+import Navbar from '../components/Navbar.astro';
+import Footer from '../components/Footer.astro';
+
+// P9: the service worker's offline fallback. Precached by public/sw.js at
+// install, so it must be fully self-contained — no server data, no fetch, and
+// no MastheadInfoStrip (which calls /api/v1/weather and would render an error
+// strip on the one page guaranteed to be shown without a network).
+//
+// Prerendered on purpose: an SSR route cannot be precached usefully, because
+// the request that fills the cache is the same kind of request that fails when
+// the visitor is actually offline.
+export const prerender = true;
+---
+
+<Layout
+  title="You're offline | NewzWale"
+  description="NewzWale could not reach the network. Saved articles are stored on this device and still open."
+>
+  <Navbar />
+
+  <main id="main" class="flex flex-1 items-center bg-surface-soft py-16">
+    <div class="mx-auto max-w-xl px-4 text-center sm:px-6">
+      <p class="font-mono-caption mb-3 text-mute">No connection</p>
+      <h1 class="mb-3 text-3xl font-semibold tracking-tight text-ink sm:text-4xl">You're offline</h1>
+      <p class="mb-8 text-sm leading-relaxed text-body">
+        NewzWale needs a network to fetch headlines, and it will not show you a fact-check verdict
+        from a cache — a verdict is only meaningful against the evidence fetched for it.
+      </p>
+
+      <div class="flex flex-col items-center justify-center gap-3 sm:flex-row">
+        <button type="button" id="offline-retry" class="btn-pill-primary min-h-11 px-6 text-sm">
+          Try again
+        </button>
+        <a
+          href="/saved"
+          class="inline-flex min-h-11 items-center px-4 text-sm font-semibold text-primary-strong hover:underline"
+        >
+          Open saved articles →
+        </a>
+      </div>
+
+      <p class="font-mono-caption mt-8 text-mute">
+        Saved articles are stored on this device, so the list opens without a network.
+      </p>
+    </div>
+  </main>
+
+  <Footer />
+</Layout>
+
+<script>
+  document.getElementById('offline-retry')?.addEventListener('click', () => {
+    window.location.reload();
+  });
+</script>

@@ -18,13 +18,34 @@ jobs:
     steps:
     - uses: actions/checkout@v7
 
-    - name: Set up Node.js 22
+    # Node 24, not 22, specifically so the D1 schema tests RUN rather than skip.
+    # tests/db/migration.test.ts executes migration 0001 against node:sqlite,
+    # which is unflagged only from Node 23.4 (on 22 it needs
+    # --experimental-sqlite). Under Node 22 those 24 tests silently skipped, so
+    # a green CI run reported coverage it did not have.
+    - name: Set up Node.js 24
       uses: actions/setup-node@v7
       with:
-        node-version: 22
+        node-version: 24
+
+    # Fails the run if node:sqlite is unavailable, so the schema tests can
+    # never quietly go back to skipping after a future runner change.
+    - name: Verify node:sqlite is available (D1 schema tests depend on it)
+      run: node -e "require('node:sqlite'); console.log('node:sqlite OK on ' + process.version)"
 
     - name: Install dependencies
       run: npm ci
+
+    # Dependency vulnerability gate (audit S-16). Deliberately placed BEFORE
+    # the build's `if:` guard so it also runs on Dependabot PRs — it needs no
+    # secret, and a dependency bump is exactly the change this should block.
+    #
+    # --audit-level=high fails on high and critical only. Moderate and below
+    # are reported without failing: Dependabot already proposes those updates,
+    # and a gate that cries wolf on every transitive moderate gets bypassed,
+    # which is worse than not having one.
+    - name: Audit dependencies
+      run: npm audit --audit-level=high
 
     - name: Run unit tests
       run: npm test

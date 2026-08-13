@@ -1,0 +1,37 @@
+---
+/** "N min read", or nothing at all.
+ *
+ *  HONESTY CONSTRAINT, stated plainly: NewzWale does not host article bodies
+ *  (D3) and the API carries no word count. The only text we hold for a story is
+ *  the publisher's own summary. Estimating "8 min read" for an article we have
+ *  never fetched would be an invented number on a product whose entire premise
+ *  is not inventing numbers.
+ *
+ *  So this renders only when it is given enough real text to mean something,
+ *  and renders NOTHING otherwise — never "0 min", never "~1 min". On the story
+ *  page that means most stories show no reading time, which is the correct
+ *  outcome until a body word count genuinely exists.
+ */
+interface Props {
+  /** The actual text being timed. */
+  text?: string | null;
+  /** Below this, the estimate is noise rather than information. */
+  minWords?: number;
+  class?: string;
+}
+
+const { text, minWords = 60, class: extraClass = '' } = Astro.props;
+
+const WORDS_PER_MINUTE = 200;
+
+const words = (text ?? '').trim().split(/\s+/).filter(Boolean).length;
+const minutes = words >= minWords ? Math.max(1, Math.round(words / WORDS_PER_MINUTE)) : null;
+---
+
+{
+  minutes !== null && (
+    <span class:list={['font-mono-caption text-mute', extraClass]}>
+      {minutes} min read
+    </span>
+  )
+}

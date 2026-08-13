@@ -1,0 +1,64 @@
+---
+/** Copy or share a link to this result.
+ *
+ *  The link is a /fact-check/[id] URL, which is a real persisted record — not
+ *  a client-side snapshot. Nothing about the claim is sent anywhere by
+ *  pressing this; it copies a URL.
+ */
+interface Props {
+  factCheckId?: string | null;
+  class?: string;
+}
+
+const { factCheckId, class: extraClass = '' } = Astro.props;
+---
+
+<div
+  data-share-result
+  data-factcheck-id={factCheckId ?? undefined}
+  hidden={!factCheckId}
+  class:list={['flex flex-wrap items-center gap-2', extraClass]}
+>
+  <button
+    type="button"
+    data-share-copy
+    class="btn-pill-secondary inline-flex min-h-11 cursor-pointer items-center px-4 text-sm"
+  >
+    Copy link
+  </button>
+
+  <a
+    data-share-open
+    href={factCheckId ? `/fact-check/${factCheckId}` : undefined}
+    class="inline-flex min-h-11 items-center px-2 text-sm font-semibold text-primary-strong"
+  >
+    Open the full result ↗
+  </a>
+
+  <span data-share-status role="status" aria-live="polite" class="font-mono-caption text-mute"
+  ></span>
+</div>
+
+<script>
+  document.addEventListener('click', async (event) => {
+    const target = event.target;
+    if (!(target instanceof HTMLElement)) return;
+    const btn = target.closest<HTMLElement>('[data-share-copy]');
+    if (!btn) return;
+
+    const box = btn.closest<HTMLElement>('[data-share-result]');
+    const id = box?.dataset.factcheckId;
+    if (!id) return;
+
+    const url = new URL(`/fact-check/${id}`, window.location.origin).toString();
+    const status = box?.querySelector<HTMLElement>('[data-share-status]');
+
+    try {
+      await navigator.clipboard.writeText(url);
+      if (status) status.textContent = 'Link copied.';
+    } catch {
+      // Clipboard is permission-gated. Say what to do instead of failing mute.
+      if (status) status.textContent = `Copy this link: ${url}`;
+    }
+  });
+</script>

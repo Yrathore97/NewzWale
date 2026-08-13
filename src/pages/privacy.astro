@@ -6,34 +6,56 @@ import Footer from '../components/Footer.astro';
 
 export const prerender = true;
 
+// P10.1b: every factual claim below is traceable to shipped code.
+//
+// The previous copy described a product that does not exist — "account
+// credentials (name and email when you sign up)", "authenticating your
+// account", "Google for authentication (OAuth)", "saved bookmarks across
+// devices", and deletion "from your account settings". NewzWale has no
+// accounts, no sign-in, no OAuth, and no sync: saved articles, topics and
+// fact-check history are localStorage only (src/lib/saved.ts,
+// src/lib/history/factcheck-history.ts) and never leave the browser. The
+// cross-device claim contradicted /saved's own on-page copy.
+//
+// Legal provisions (the data-selling commitment, retention periods, access
+// control, regulatory compliance) are NOT rewritten here — code cannot verify
+// them. Only factual product descriptions were corrected.
 const sections = [
   {
-    heading: 'Information We Collect',
-    body: 'NewzWale collects limited data required to personalize and secure your news experience. This includes account credentials (name and email when you sign up), preferred language selection, saved bookmarks, and anonymized browsing analytics used to improve content delivery. We do not collect data unrelated to operating our service.'
+    heading: 'What Stays On Your Device',
+    body: 'Saved articles, your topic choices, your fact-check history, your language selection and your light/dark theme are stored in your browser\'s own local storage. They are never transmitted to us and never leave the device you set them on. There is no account to attach them to, so nothing syncs: saving an article on your phone will not make it appear on your laptop, and clearing your browser data clears them permanently.'
   },
   {
-    heading: 'How We Use Your Information',
-    body: 'Your information is used solely to operate the NewzWale service: authenticating your account, persisting your personalized feed and language preferences, delivering your saved bookmarks across devices, and generating aggregated, non-identifying analytics. We never sell your personal data to third parties.'
+    heading: 'No Accounts, No Sign-In',
+    body: 'NewzWale has no user accounts, no registration, no passwords and no third-party sign-in. We do not ask for, receive or store your name, email address or any other identity information, because there is nowhere in the product that would use it.'
   },
   {
-    heading: 'Cookies & Local Storage',
-    body: 'NewzWale uses browser local storage to remember your theme, language preference, and authentication session. Minimal cookies may be used for essential functionality and analytics. You can clear this data at any time through your browser settings without impacting basic access to headlines.'
+    heading: 'What Reaches Our Servers',
+    body: 'Reading headlines sends us the ordinary information any web request carries. Your IP address is used to apply rate limits, and Cloudflare supplies a city-level approximation of your location so the masthead can show local weather — that approximation is used on our servers only and is never passed to a third party. We do not ask your browser for precise GPS location; that permission is disabled site-wide.'
+  },
+  {
+    heading: 'Fact Checks You Submit',
+    body: 'A claim or URL you submit to the fact-checker is sent to our servers and, in the course of checking it, to Google\'s Fact Check Tools API, the Tavily search API, and Cloudflare Workers AI. The result is cached for up to 24 hours so an identical claim can be answered quickly. Where the public fact-check archive is enabled, a completed check — including the claim text — is stored as a public record with a shareable link. Please do not submit personal, confidential or identifying information to the fact-checker.'
+  },
+  {
+    heading: 'Cookies & Analytics',
+    body: 'NewzWale itself sets no cookies. We use Google Analytics to understand aggregate traffic, and its script sets its own cookies and receives standard analytics data under Google\'s privacy policy. Analytics currently loads on every page and we do not yet offer an in-product consent control; you can block it with your browser\'s or an extension\'s tracker blocking, which does not affect any other part of the site.'
   },
   {
     heading: 'Third-Party Services',
-    body: 'We integrate with trusted providers such as Google for authentication (OAuth), cloud content delivery networks, and analytics platforms. These providers process data under their own privacy policies. We do not authorize them to sell or misuse your data.'
+    body: 'We rely on Cloudflare for hosting, delivery and AI inference; NewsData.io, the Guardian and public RSS feeds for headlines; Google Fact Check Tools and Tavily for fact-check evidence; and Google Analytics for aggregate traffic measurement. Each processes data under its own privacy policy. Headlines link out to publishers\' own websites, which we do not control.'
   },
   {
     heading: 'Data Retention & Security',
-    body: 'We retain account data for as long as your account remains active or as required by law. All transmissions are encrypted in transit, and access to personal data is restricted to authorized personnel. Industry-standard safeguards protect stored information from unauthorized access or disclosure.'
+    body: 'Device-local data stays until you clear it — we cannot see it, reach it or delete it for you. Fact-check results are cached for up to 24 hours; stored fact-check records are an append-only public archive rather than personal data tied to an individual. All traffic is served over HTTPS. Content-Security-Policy violation reports are written to server logs for diagnostics and are not stored in any database.'
   },
   {
-    heading: 'Your Rights & Choices',
-    body: 'You may access, correct, export, or delete your personal information at any time from your account settings, or by contacting our editorial desk. You may also withdraw consent for analytics and clear local storage data. Requests are processed in accordance with applicable data protection regulations.'
+    heading: 'Your Choices',
+    body: 'Because there is no account, there are no account settings and no deletion request to file. You control everything device-local directly: clear your browser\'s site data to remove your saved articles, topics, fact-check history, language and theme. You can block analytics at the browser level. Publisher sites you open from a headline are governed by their own policies.'
   },
   {
     heading: 'Changes to This Policy',
-    body: 'We may update this Privacy Policy periodically to reflect changes in our practices or legal obligations. Material changes will be communicated prominently on this page and via our news feed. Continued use of NewzWale after updates constitutes acceptance of the revised policy.'
+    body: 'We may update this Privacy Policy periodically to reflect changes in our practices or legal obligations. Material changes will be reflected on this page with a revised "last updated" date. Continued use of NewzWale after updates constitutes acceptance of the revised policy.'
   },
   {
     heading: 'Contact Us',

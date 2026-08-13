@@ -1,0 +1,127 @@
+---
+import Layout from '../../layouts/Layout.astro';
+import Navbar from '../../components/Navbar.astro';
+import MastheadInfoStrip from '../../components/MastheadInfoStrip.astro';
+import Footer from '../../components/Footer.astro';
+import StoryHeader from '../../components/news/StoryHeader.astro';
+import CoverageList from '../../components/news/CoverageList.astro';
+import FactCheckChip from '../../components/news/FactCheckChip.astro';
+import { isSafeUrl } from '../../lib/url';
+import type { ApiArticle } from '../../lib/news/read';
+import type { FactCheckRecord } from '../../lib/db/repositories/fact-checks';
+import type { ApiResponseBody } from '../../lib/api/response';
+
+// P5 / AD-09: a STORY PAGE, not a reproduction. Content shape follows AD-09's
+// proposed layout exactly, as adopted verbatim in NEWZWALE_UI_UX_SPEC.md §4.3
+// ("Per architecture AD-09 — a story page, not a reproduction"): headline,
+// publisher, timestamp, an attributed extract (the publisher's own summary,
+// never rewritten), a prominent link to the full story, the coverage
+// cluster ("also reported by"), and linked fact-checks. No article body is
+// hosted, generated, or invented here — README.md and PROGRESS.md's
+// no-hosted-body constraint (D3) is unchanged.
+export const prerender = false;
+
+const { slug } = Astro.params;
+
+interface StoryResponse {
+  article: ApiArticle;
+  coverage: ApiArticle[];
+  factChecks: FactCheckRecord[];
+}
+
+let story: StoryResponse | null = null;
+
+if (slug) {
+  try {
+    const res = await fetch(new URL(`/api/v1/news/${encodeURIComponent(slug)}`, Astro.url));
+    if (res.ok) {
+      const body = (await res.json()) as ApiResponseBody<StoryResponse>;
+      if ('data' in body) story = body.data;
+    }
+  } catch {
+    // story stays null; falls through to 404 below
+  }
+}
+
+// Matches the existing category/[slug].astro:15 pattern: Astro.rewrite('/404')
+// fails under this project's Cloudflare SSR build, so return the 404 status
+// directly instead.
+if (!story) {
+  return new Response(null, { status: 404 });
+}
+
+const { article, coverage, factChecks } = story;
+const readUrl = isSafeUrl(article.url) ? article.url : null;
+const primaryVerdict = factChecks[0]?.verdict ?? null;
+---
+
+<Layout title={`${article.title} | NewzWale`} description={article.summary ?? article.title}>
+  <Navbar />
+  <MastheadInfoStrip />
+
+  <main id="main" class="flex-1 bg-surface-soft py-8">
+    <div class="mx-auto flex max-w-3xl flex-col gap-8 px-4 sm:px-6">
+      <StoryHeader
+        article={article}
+        verdict={primaryVerdict}
+        factCheckHref={factChecks[0] ? `/fact-check/${factChecks[0].id}` : null}
+      />
+
+      {
+        article.summary && (
+          <blockquote class="border-l-4 border-primary-strong pl-4 text-base leading-relaxed text-body">
+            "{article.summary}"{' '}
+            <span class="not-italic text-xs text-mute">— {article.source}</span>
+          </blockquote>
+        )
+      }
+
+      {
+        readUrl && (
+          <a
+            href={readUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            class="btn-pill-primary inline-flex min-h-11 w-fit items-center px-6 text-sm"
+          >
+            Read the full story at {article.source} ↗
+          </a>
+        )
+      }
+
+      <CoverageList coverage={coverage} class="border-t border-hairline pt-8" />
+
+      <section class="border-t border-hairline pt-8" aria-labelledby="factcheck-heading">
+        <h2 id="factcheck-heading" class="font-mono-caption mb-4 text-mute">
+          Fact check
+        </h2>
+        {
+          factChecks.length > 0 ? (
+            <ul class="flex flex-col divide-y divide-hairline-soft">
+              {factChecks.map((fc) => (
+                <li class="py-3">
+                  <a
+                    href={`/fact-check/${fc.id}`}
+                    class="flex min-h-11 flex-col gap-2 rounded-sm focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-strong"
+                  >
+                    <span class="text-[15px] font-medium leading-snug text-ink">{fc.claim}</span>
+                    <FactCheckChip verdict={fc.verdict} />
+                  </a>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <a
+              href={`/fact-check?claim=${encodeURIComponent(article.title)}`}
+              class="inline-flex min-h-11 items-center text-sm font-semibold text-primary-strong hover:underline"
+            >
+              Check a claim from this story →
+            </a>
+          )
+        }
+      </section>
+    </div>
+  </main>
+
+  <Footer />
+</Layout>
