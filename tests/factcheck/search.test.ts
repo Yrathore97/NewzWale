@@ -99,6 +99,11 @@ describe('search', () => {
     const body = JSON.parse(init.body);
     expect(body.query).toBe('is the sky blue');
     expect(body.max_results).toBe(8);
+    // Measured on a live claim: these domains occupied evidence slots
+    // without ever contributing a usable stance. See search.ts.
+    expect(body.exclude_domains).toEqual(
+      expect.arrayContaining(['facebook.com', 'scribd.com', 'magicbricks.com']),
+    );
   });
 
   it('sends the key in the Authorization header, never in the URL', async () => {

@@ -10,7 +10,21 @@ export function extractReadableText(html: string): string {
   return html
     .replace(/<(script|style|noscript|svg)[\s\S]*?<\/\1>/gi, ' ')
     .replace(/<!--[\s\S]*?-->/g, ' ')
-    .replace(/<[^>]+>/g, ' ')
+    // Quote-aware tag stripping. `<[^>]+>` alone treats the FIRST `>`
+    // anywhere as the tag's end, including one sitting inside a quoted
+    // attribute value. MediaWiki's Parsoid HTML (Wikipedia) embeds raw
+    // wikitext in a `data-mw="..."` attribute - e.g. a `<ref>` citation's
+    // original `{{cite news|...}}</ref>` source, unescaped `<`/`>` and all,
+    // still inside a properly double-quoted attribute. The naive regex cut
+    // the tag off at that internal `>` and let everything after it - raw
+    // template markup, JSON-shaped metadata like `"state":{"wt":"..."}`,
+    // and eventually the real page text run together - through as if it
+    // were visible prose. A real /fact-check request on a Wikipedia source
+    // fed exactly this to the stance classifier, which correctly read it as
+    // unclassifiable ("unclear") because it IS unclassifiable, not article
+    // text. Consuming an entire quoted string as one unit, `>` included,
+    // keeps that content where it belongs: stripped with its tag.
+    .replace(/<(?:[^>"']|"[^"]*"|'[^']*')*>/g, ' ')
     .replace(/&[a-z#0-9]+;/gi, (m) => ENTITIES[m.toLowerCase()] ?? ' ')
     .replace(/\s+/g, ' ')
     .trim()

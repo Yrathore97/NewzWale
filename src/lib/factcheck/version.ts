@@ -78,10 +78,29 @@ export const PIPELINE_VERSION = 4;
  *      Nothing about how evidence is JUDGED changed; a v3 verdict is not
  *      wrong, it was simply reached over a thinner evidence set. It is still
  *      made unreachable, because the two cannot be told apart from a cache key.
+ *  5 = Two more retrieval-shape changes, found together while verifying #4
+ *      against a live claim:
+ *      - Both `extract.ts`'s `extractReadableText` AND `passage.ts`'s
+ *        `toBlocks` could leak a quoted HTML attribute's contents as prose
+ *        when the value contained a raw `>` - real on Wikipedia, whose
+ *        Parsoid HTML stores a `<ref>` citation's original wikitext in
+ *        `data-mw="..."`. `passage.ts` is the path a full-page read
+ *        actually takes (it reads raw HTML directly, ahead of and
+ *        independent of `extract.ts`'s own stripper), and its copy of the
+ *        same naive tag-strip regex was the one a live request actually
+ *        hit: the passage handed to stance classification was template
+ *        markup and JSON-shaped metadata, not article text. Both fixed with
+ *        the same quote-aware tag strip.
+ *      - Tavily now excludes a short, MEASURED list of domains
+ *        (facebook.com, scribd.com, magicbricks.com, etc. - see search.ts)
+ *        that occupied evidence slots on a live claim without ever
+ *        contributing a usable stance.
+ *      Both change WHAT IS RETRIEVED AND READ for a given claim; neither
+ *      touches the gate, the prompt or the verdict enum.
  *
  *  Same rule as PIPELINE_VERSION: bumping makes affected entries unreachable
  *  rather than re-labelling them. */
-export const EVIDENCE_VERSION = 4;
+export const EVIDENCE_VERSION = 5;
 
 /** Workers AI model backing stage 3.
  *
