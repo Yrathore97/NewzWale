@@ -391,7 +391,17 @@ export async function runFactCheck(
   const conflictEligible = new Set(
     items.filter((i) => (i.relevanceLevel ?? 'none') !== 'none').map((i) => i.position),
   );
-  const sourceConflicts = detectSourceConflicts(items, { relevantPositions: conflictEligible });
+  // The stricter set that governs MATERIALITY rather than detection: a
+  // disagreement between two sources that both failed the corroboration bar
+  // is a fact about those pages, not about the claim. See the option's note
+  // in contradiction.ts for the live case this was measured on.
+  const corroborationEligible = new Set(
+    items.filter((i) => i.relevant !== false).map((i) => i.position),
+  );
+  const sourceConflicts = detectSourceConflicts(items, {
+    relevantPositions: conflictEligible,
+    corroboratingPositions: corroborationEligible,
+  });
 
   const gateProposal: VerdictProposal = {
     ...proposal,

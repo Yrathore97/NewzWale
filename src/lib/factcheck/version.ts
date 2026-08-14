@@ -53,8 +53,28 @@
  *  The bump is MANDATORY, not cosmetic. Verdicts cached under version 1 were
  *  produced by a system that could not express partly_true or needs_context
  *  and would call a tier-3-only claim "verified". Serving one today would
- *  publish a conclusion this system would no longer reach. */
-export const PIPELINE_VERSION = 4;
+ *  publish a conclusion this system would no longer reach.
+ *
+ *  5 = Contradiction materiality is now validated deterministically before it
+ *      can veto. gate.ts itself is UNCHANGED, but two inputs to its RULE 2
+ *      are:
+ *        - a numeric disagreement where NEITHER side cleared the corroboration
+ *          bar is 'minor', not 'material' (contradiction.ts);
+ *        - a model-reported contradiction naming fewer than two distinct
+ *          sources is 'minor', not 'material' (parse.ts).
+ *      RULE 2 runs ahead of every corroboration floor, so both were able to
+ *      forbid a verdict outright. Measured live: one claim collected four
+ *      'material' vetoes - three from pages measuring different roads
+ *      (302 km vs 8.3 km vs 49.96 km), none of which counted toward
+ *      corroboration, and one from a single-source model finding whose text
+ *      SUPPORTED the claim. The same evidence now reaches the floors instead,
+ *      so by this file's own rule ("anything that could make the same evidence
+ *      yield a different verdict") the version had to move.
+ *
+ *      Both validations are DEMOTE-ONLY and neither grants a verdict: the
+ *      corroboration, tier and strength floors are untouched, and the claim
+ *      above still returns UNVERIFIED - now for the honest reason. */
+export const PIPELINE_VERSION = 5;
 
 /** Retrieval and evidence characterisation.
  *

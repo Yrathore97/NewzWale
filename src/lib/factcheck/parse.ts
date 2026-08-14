@@ -109,11 +109,34 @@ function parseContradictions(v: unknown): ContradictionFinding[] {
   if (!Array.isArray(v)) return [];
   return v
     .filter((c): c is Record<string, unknown> => Boolean(c) && typeof c === 'object')
-    .map((c) => ({
-      positions: positions(c.positions),
-      point: str(c.point, 300),
-      significance: c.significance === 'material' ? ('material' as const) : ('minor' as const),
-    }))
+    .map((c) => {
+      const cited = positions(c.positions);
+      const claimed = c.significance === 'material' ? ('material' as const) : ('minor' as const);
+
+      // A CONTRADICTION BETWEEN SOURCES REQUIRES TWO SOURCES.
+      //
+      // Definitional, and enforced here because a 'material' contradiction is
+      // the single most powerful thing the model can emit: gate.ts RULE 2
+      // forbids any assertive verdict on one, ahead of every corroboration
+      // floor. Nothing else the model returns has a veto that strong.
+      //
+      // Observed live: on a check of "the Agra-Lucknow Expressway was built by
+      // the state government of UP", the model returned
+      //   { positions: [2], significance: "material",
+      //     point: "The state government of Uttar Pradesh under ... Akhilesh
+      //             Yadav developed the project." }
+      // - one source, and a point that SUPPORTS the claim rather than
+      // contradicting anything. That single malformed finding was enough to
+      // veto the verdict.
+      //
+      // Demote-only, mirroring validateStance: this can turn 'material' into
+      // 'minor', never the reverse. The finding is still parsed and carried,
+      // so nothing is hidden - it simply cannot exercise a veto it does not
+      // have the evidence for.
+      const significance = claimed === 'material' && new Set(cited).size < 2 ? 'minor' : claimed;
+
+      return { positions: cited, point: str(c.point, 300), significance };
+    })
     .filter((c) => c.point.length > 0)
     .slice(0, 10);
 }
