@@ -29,7 +29,13 @@ export interface SearchHit {
 }
 
 const ENDPOINT = 'https://api.tavily.com/search';
-const MAX_RESULTS = 5;
+/** Raised from 5. `pipeline.ts` still caps total evidence shown at
+ *  `MAX_SOURCES` (6) — this only widens the candidate pool Tavily ranks
+ *  before that cap is applied, so a source that directly addresses a narrow
+ *  sub-fact (e.g. "who governed when X was built") has more chance of
+ *  surviving into the final 6 instead of being pushed out by generic
+ *  coverage of the same topic. */
+const MAX_RESULTS = 8;
 
 export function parseTavilyResults(raw: any): SearchHit[] {
   const results = Array.isArray(raw?.results) ? raw.results : [];

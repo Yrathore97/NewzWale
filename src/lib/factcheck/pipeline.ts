@@ -25,7 +25,7 @@ import { detectSourceConflicts } from './contradiction';
 import { buildFactCheckPrompt } from './prompt';
 import { parseProposal, invalidProposal } from './parse';
 import { profileFor, normalizeDomain, detectSyndication } from './sources';
-import { extractClaim } from './claim';
+import { extractClaim, searchQuery } from './claim';
 import { EVIDENCE_VERSION, MODEL, PIPELINE_VERSION } from './version';
 import type { CertifiedReview } from './google';
 import type { SearchHit } from './search';
@@ -223,7 +223,9 @@ export async function runFactCheck(
     };
   }
 
-  const query = extracted.text.slice(0, QUERY_CHARS);
+  // Retrieval-only. `extracted.text` remains the claim everything downstream
+  // is judged against — see the note on `searchQuery`.
+  const query = searchQuery(extracted.text, QUERY_CHARS);
 
   // ── Stage 2. Retrieval — BOTH paths, in parallel. ──────────────────────
   const [reviewsResult, passagesResult] = await Promise.allSettled([

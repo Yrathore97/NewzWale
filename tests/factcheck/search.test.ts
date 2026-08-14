@@ -98,7 +98,7 @@ describe('search', () => {
     expect(init.method).toBe('POST');
     const body = JSON.parse(init.body);
     expect(body.query).toBe('is the sky blue');
-    expect(body.max_results).toBe(5);
+    expect(body.max_results).toBe(8);
   });
 
   it('sends the key in the Authorization header, never in the URL', async () => {

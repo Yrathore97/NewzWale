@@ -194,6 +194,38 @@ export function decomposeSentence(sentence: string): string[] {
   return [sentence];
 }
 
+/** Turns a claim into the string sent to search providers.
+ *
+ *  THE CLAIM IS NOT THE QUERY. A claim is judged in full; a query only has to
+ *  FIND the pages that can judge it. Sending the claim verbatim was measurably
+ *  the wrong shape for a contrastive assertion:
+ *
+ *      claim  "The Agra Lucknow Expressway was built by the state government
+ *              of Uttar Pradesh, not the BJP government."
+ *
+ *  The trailing "not the BJP government" is the part being REFUTED, yet a
+ *  keyword engine weights it like any other text — so results skew toward
+ *  pages about the thing the claim denies, and the sources that would settle
+ *  the actual question ("who governed when it was built") rank below them.
+ *  With MAX_SOURCES capped at 6, being outranked means being invisible.
+ *
+ *  Only a TRAILING contrastive clause is dropped, and only when it runs to the
+ *  end of the string: "A, not B, happened" keeps its middle clause, because
+ *  removing it would change which proposition is being searched for.
+ *
+ *  NOTHING DOWNSTREAM SEES THIS STRING. Stance classification, fidelity,
+ *  relevance and the gate all read `extracted.text` — the claim as submitted.
+ *  This function widens retrieval; it cannot change how evidence is judged. */
+export function searchQuery(claim: string, limit = 300): string {
+  const trimmed = claim
+    .replace(/,\s*(?:not|and not|but not|rather than|instead of)\s+[^,]*$/i, '')
+    .trim();
+
+  // Never trim into something too short to search with.
+  const usable = trimmed.length >= MIN_CLAIM_CHARS ? trimmed : claim.trim();
+  return usable.slice(0, limit);
+}
+
 export interface ExtractOptions {
   source?: 'text' | 'url' | 'image';
   originUrl?: string;
