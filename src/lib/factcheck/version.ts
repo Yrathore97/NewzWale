@@ -68,10 +68,20 @@ export const PIPELINE_VERSION = 4;
  *      block-level passage selection instead of the first N characters;
  *      deduplication before counting. The evidence SET for a given claim is
  *      materially different, so entries from version 2 must not be served.
+ *  4 = Retrieval targeting. The query sent to providers is no longer the claim
+ *      verbatim: a TRAILING contrastive clause is dropped, so "X was built by
+ *      A, not B" is retrieved as "X was built by A" instead of pulling pages
+ *      about B. Tavily's candidate pool also went 5 -> 8. Both change WHAT IS
+ *      RETRIEVED for a given claim — squarely the "source count / what we
+ *      retrieve" trigger above — so version 3 entries must not be served.
+ *
+ *      Nothing about how evidence is JUDGED changed; a v3 verdict is not
+ *      wrong, it was simply reached over a thinner evidence set. It is still
+ *      made unreachable, because the two cannot be told apart from a cache key.
  *
  *  Same rule as PIPELINE_VERSION: bumping makes affected entries unreachable
  *  rather than re-labelling them. */
-export const EVIDENCE_VERSION = 3;
+export const EVIDENCE_VERSION = 4;
 
 /** Workers AI model backing stage 3.
  *
