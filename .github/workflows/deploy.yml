@@ -61,3 +61,30 @@ jobs:
     - name: Build Web Application
       if: github.actor != 'dependabot[bot]'
       run: npm run build
+
+    # ── Deploy. Closes audit item P-14: this workflow tested and built but
+    # never shipped, so every release was a manual `npm run deploy` from
+    # someone's laptop.
+    #
+    # GATED ON push-to-main, DELIBERATELY. A `pull_request` run must never
+    # reach this step: PR runs build code that has not been reviewed and, from
+    # a fork, code an outsider wrote. Publishing that to the live site would
+    # turn "open a PR" into "deploy to production". `github.event_name` is the
+    # check that stops it - `github.ref` alone is not enough, because on a
+    # pull_request event it can still point at main.
+    #
+    # `npx wrangler deploy`, not `npm run deploy`: the latter is
+    # `npm run build && wrangler deploy`, which would rebuild and ship an
+    # artifact the checks above never saw. This ships exactly the dist/ that
+    # the tests, type check and build just passed against.
+    #
+    # CLOUDFLARE_ACCOUNT_ID is an identifier, not a credential - it authorises
+    # nothing without the token, and Cloudflare's own docs keep it in the
+    # committed wrangler config. It is set explicitly because wrangler only
+    # auto-detects an account when the token resolves to exactly one, and a
+    # deploy that breaks the day a second account appears is not autopilot.
+    - name: Deploy to Cloudflare Workers
+      if: github.event_name == 'push' && github.ref == 'refs/heads/main' && github.actor != 'dependabot[bot]'
+      env:
+        CLOUDFLARE_ACCOUNT_ID: df8800cb8bd7ac035fd1cd46f5dd66ed
+      run: npx wrangler deploy

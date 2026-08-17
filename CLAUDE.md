@@ -410,9 +410,13 @@ rediscovered from scratch every session, not as a standing to-do list:
 - Google Analytics loads unconditionally with no consent gate (S-10, open).
   This also blocks the P10 analytics events: there is no consent mechanism for
   them to respect.
-- `.github/workflows/deploy.yml` runs audit/tests/check/build but does not
-  deploy (audit item P-14, open). Deployment is the manual `npm run deploy`
-  and needs `CLOUDFLARE_API_TOKEN`.
+- ~~`.github/workflows/deploy.yml` runs audit/tests/check/build but does not
+  deploy (audit item P-14).~~ **CLOSED.** The workflow now runs
+  `npx wrangler deploy` after the build, gated on
+  `github.event_name == 'push' && github.ref == 'refs/heads/main'` so a
+  pull_request run can never publish unreviewed (or fork-authored) code.
+  Merging to `main` is now the release action; `npm run deploy` remains
+  available for a manual push.
 - **Cron ingestion is live and quota-sized.** `0 */2 * * *`, English only,
   8 categories — one NewsData request per category, so 96/day against a
   documented 200/day free tier. The remaining headroom is not spare: the
@@ -466,15 +470,26 @@ now complete** — prerendered-route security headers (S-11), the `robots.txt`
 `/admin` removal (P1), the `npm audit` CI gate (S-16), and the
 README/WEBSITE-DOCUMENTATION/AGENTS sync.
 
-P10 overall remains **in progress**. Everything still open is blocked on
-something outside the repository: Cloudflare credentials (deploy, D1
-provisioning), a product/legal decision (GA consent, and therefore the
-analytics events), a protected-path authorization (the `package.json`
-migration-script fix), or a missing definition (the performance budget).
-See §17.
+P10 overall remains **in progress**. What is still open is blocked on a
+product/legal decision (GA consent, and therefore the analytics events), a
+protected-path authorization (the `package.json` migration-script fix), or a
+missing definition (the performance budget). See §17.
 
-Nothing has been deployed. `npm run build` passes and the output is
-deployment-ready, but `npm run deploy` has never been run from here.
+**The site IS deployed, and deployment is now automatic.** Superseding the
+long-standing "nothing has been deployed" note:
+
+- `wrangler` is authenticated on this machine by **OAuth**, not
+  `CLOUDFLARE_API_TOKEN`. Checking only for that env var reports a blocker
+  that does not exist — check `npx wrangler whoami` before claiming deploy is
+  impossible.
+- Production carries all four secrets (`TAVILY_API_KEY`,
+  `GOOGLE_FACTCHECK_API_KEY`, `NEWSDATA_API_KEY`, `GUARDIAN_API_KEY`) as
+  Worker secrets. `.dev.vars` is local-only and is NOT what production reads;
+  a new key must be added with `wrangler secret put`, never by editing
+  `.dev.vars` alone.
+- Remote D1 is provisioned, migrated and populated by the 2-hourly cron.
+- **Merging to `main` now deploys.** Treat `main` as production: a merge is a
+  release, not a checkpoint.
 
 Do not begin P11, or any item in §17, without explicit authorization for that
 specific task.
