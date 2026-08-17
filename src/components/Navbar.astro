@@ -175,7 +175,12 @@ const linkIdle = 'text-body hover:text-ink hover:bg-gradient-start';
             href={`/category/${c.slug}`}
             aria-current={activeCategory === c.slug ? 'page' : undefined}
             class:list={[
-              'inline-flex shrink-0 items-center rounded-full px-3.5 py-1.5 text-xs font-medium transition-colors duration-200',
+              // min-h-9 matches `linkBase` above (the primary nav's own
+              // pills) - this strip had no minimum at all and measured 28px
+              // tall, under every sibling control in this file. The parent
+              // nav is already h-11 (44px) and centers its children, so this
+              // fits without changing the bar's own height.
+              'inline-flex min-h-9 shrink-0 items-center rounded-full px-3.5 py-1.5 text-xs font-medium transition-colors duration-200',
               activeCategory === c.slug
                 ? 'bg-primary-strong text-on-primary font-semibold shadow-stacked-sm'
                 : 'bg-secondary-bg text-ink-soft hover:bg-secondary-pressed',
