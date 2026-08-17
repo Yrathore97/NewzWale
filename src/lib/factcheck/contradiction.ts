@@ -91,6 +91,59 @@ export interface DetectConflictsOptions {
    *  Omitted entirely: every conflict keeps the materiality it computes, i.e.
    *  the previous behaviour. */
   corroboratingPositions?: Set<number>;
+  /** The claim, so numeric comparison is anchored to what it ASSERTS.
+   *
+   *  Without this, every figure on a page is compared with every figure on
+   *  every other page, and `unit` is the only guard. All percentages share
+   *  one unit, so a repo rate is "compared" with an inflation rate. MEASURED
+   *  in production on "the RBI held the repo rate at 6.5 percent": FORTY-FOUR
+   *  material disagreements, including
+   *
+   *      newsonair.gov.in reports 6.5 percent where pib.gov.in reports 2.6%
+   *
+   *  - a policy rate against an inflation figure. That pile vetoed the verdict
+   *  through RULE 2 even though a tier-1 source supported the claim. This is
+   *  almost certainly the largest single source of spurious UNVERIFIED
+   *  results in the product.
+   *
+   *  Given the claim, two things change:
+   *
+   *    1. Only units the claim actually asserts are compared. A claim with no
+   *       quantity gets no numeric conflicts at all - it cannot be
+   *       contradicted "on the numbers" when it states none. This alone is
+   *       the root-cause fix for the Agra-Lucknow case, where three pages
+   *       measuring three different roads produced the veto.
+   *    2. Each source contributes ONE figure per claim quantity: the value
+   *       nearest the claim's. That is the source's best candidate for the
+   *       thing being claimed, and it collapses the combinatorial pile to one
+   *       comparison per pair.
+   *
+   *  WHAT THIS DELIBERATELY DOES NOT DO: require the source's wording to
+   *  resemble the claim's. That was tried and rejected - it re-breaks the
+   *  documented case this module's wide net exists for, where a source
+   *  disagreeing via "disbursements totalled" rather than "the fund
+   *  distributed" must still be caught. Nearest-value anchoring is
+   *  paraphrase-blind, which is the point.
+   *
+   *  Omitted entirely: every figure is compared against every other, i.e. the
+   *  previous behaviour, which is what the unit tests calling this without a
+   *  claim continue to assert. */
+  claimText?: string;
+}
+
+/** The figure closest to `target`. The source's best candidate for the
+ *  quantity the claim is about. Null when it offers none of that unit. */
+function nearestTo(target: number, facts: NumericFact[]): NumericFact | null {
+  let best: NumericFact | null = null;
+  let bestDistance = Infinity;
+  for (const fact of facts) {
+    const distance = Math.abs(fact.value - target);
+    if (distance < bestDistance) {
+      bestDistance = distance;
+      best = fact;
+    }
+  }
+  return best;
 }
 
 /** Finds disagreements between evidence passages.
@@ -119,6 +172,12 @@ export function detectSourceConflicts(
     !options.corroboratingPositions.has(posA) &&
     !options.corroboratingPositions.has(posB);
 
+  // null = no claim supplied, so fall back to comparing every figure with
+  // every other. An EMPTY array is different and meaningful: the claim was
+  // supplied and asserts no quantity, so there is nothing to disagree about
+  // numerically.
+  const claimNumbers = options.claimText ? extractNumbers(options.claimText) : null;
+
   for (let i = 0; i < usable.length; i += 1) {
     for (let j = i + 1; j < usable.length; j += 1) {
       const a = usable[i]!;
@@ -135,23 +194,35 @@ export function detectSourceConflicts(
       const aNumbers = extractNumbers(aText);
       const bNumbers = extractNumbers(bText);
 
-      for (const an of aNumbers) {
-        for (const bn of bNumbers) {
-          const conflict = numberConflict(an, bn);
-          if (!conflict) continue;
-          conflicts.push({
-            evidenceA: a.position,
-            evidenceB: b.position,
-            conflictType: 'number',
-            point: `${a.publisher} reports ${an.raw} where ${b.publisher} reports ${bn.raw}`,
-            materiality: bothBelowCorroborationBar(a.position, b.position)
-              ? 'minor'
-              : conflict.materiality,
-            resolutionStatus: 'unresolved',
-            valueA: an.raw,
-            valueB: bn.raw,
-          });
+      // Which figures are even eligible to be compared. Claim-anchored when
+      // a claim was supplied (one pair per asserted quantity), otherwise the
+      // original every-figure-against-every-figure cross product.
+      const numberPairs: [NumericFact, NumericFact][] = [];
+      if (claimNumbers) {
+        for (const cn of claimNumbers) {
+          const an = nearestTo(cn.value, aNumbers.filter((n) => n.unit === cn.unit));
+          const bn = nearestTo(cn.value, bNumbers.filter((n) => n.unit === cn.unit));
+          if (an && bn) numberPairs.push([an, bn]);
         }
+      } else {
+        for (const an of aNumbers) for (const bn of bNumbers) numberPairs.push([an, bn]);
+      }
+
+      for (const [an, bn] of numberPairs) {
+        const conflict = numberConflict(an, bn);
+        if (!conflict) continue;
+        conflicts.push({
+          evidenceA: a.position,
+          evidenceB: b.position,
+          conflictType: 'number',
+          point: `${a.publisher} reports ${an.raw} where ${b.publisher} reports ${bn.raw}`,
+          materiality: bothBelowCorroborationBar(a.position, b.position)
+            ? 'minor'
+            : conflict.materiality,
+          resolutionStatus: 'unresolved',
+          valueA: an.raw,
+          valueB: bn.raw,
+        });
       }
 
       // ── Dates ────────────────────────────────────────────────────────

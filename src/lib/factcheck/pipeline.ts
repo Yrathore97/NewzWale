@@ -401,6 +401,10 @@ export async function runFactCheck(
   const sourceConflicts = detectSourceConflicts(items, {
     relevantPositions: conflictEligible,
     corroboratingPositions: corroborationEligible,
+    // Anchors numeric comparison to the quantities the claim actually
+    // asserts. Without it every percentage on every page is compared with
+    // every other, and a policy rate "disagrees" with an inflation figure.
+    claimText: extracted.text,
   });
 
   const gateProposal: VerdictProposal = {

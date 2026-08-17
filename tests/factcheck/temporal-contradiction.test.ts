@@ -293,4 +293,68 @@ describe('contradiction between sources', () => {
     ]);
     expect(hasMaterialConflict(conflicts)).toBe(true);
   });
+
+  // ── Claim-anchored numeric comparison ─────────────────────────────────
+  // `unit` alone is far too coarse: every percentage shares one unit, so a
+  // policy rate was being compared with an inflation rate. See the
+  // `claimText` note in contradiction.ts for the production measurement.
+
+  it('does not manufacture numeric conflicts for a claim asserting no quantity', () => {
+    // The live Agra-Lucknow case at its root: three pages measuring three
+    // different roads. The claim states no figure, so it cannot be
+    // contradicted "on the numbers".
+    const conflicts = detectSourceConflicts(
+      [
+        ev('wikipedia.org', 'The expressway is 302 km long.'),
+        ev('thehindu.com', 'The new corridor will span 49.96 kilometres.'),
+      ],
+      { claimText: 'The expressway was built by the state government, not the BJP government.' },
+    );
+    expect(conflicts.filter((c) => c.conflictType === 'number')).toHaveLength(0);
+  });
+
+  it('compares only the unit the claim asserts, and one figure per source', () => {
+    // The live RBI case. Each passage carries several percentages; only the
+    // one nearest the claim's 6.5 is that source's candidate for "the repo
+    // rate". 6.5 vs 6.25 is under the material threshold; the inflation and
+    // CRR figures must not be dragged in as disagreements.
+    const conflicts = detectSourceConflicts(
+      [
+        ev('newsonair.gov.in', 'The repo rate stands at 6.5 percent. Inflation was 2.6%.'),
+        ev('groww.in', 'The repo rate is 6.25%. CRR is 4.40%. Growth was 0.9%.'),
+      ],
+      { claimText: 'The Reserve Bank of India held the repo rate at 6.5 percent.' },
+    );
+    const numeric = conflicts.filter((c) => c.conflictType === 'number');
+    expect(numeric).toHaveLength(1);
+    expect(hasMaterialConflict(numeric)).toBe(false);
+  });
+
+  it('STILL catches a real disagreement about the claimed figure', () => {
+    // The guard against over-suppression: this must not become a way to hide
+    // genuine contradictions.
+    const conflicts = detectSourceConflicts(
+      [
+        ev('a.example', 'The repo rate stands at 6.5 percent.'),
+        ev('b.example', 'The central bank cut the rate to 4 percent.'),
+      ],
+      { claimText: 'The Reserve Bank of India held the repo rate at 6.5 percent.' },
+    );
+    expect(hasMaterialConflict(conflicts)).toBe(true);
+  });
+
+  it('remains PARAPHRASE-BLIND — the documented wide-net case still fires', () => {
+    // contradiction.ts's whole reason for a wide net: source B disagrees via
+    // "disbursements totalled" rather than the claim's "distributed". A
+    // wording-similarity filter would silently drop this; nearest-value
+    // anchoring must not.
+    const conflicts = detectSourceConflicts(
+      [
+        ev('a.example', 'The fund distributed 15 million rupees.'),
+        ev('b.example', 'Disbursements totalled 10 million rupees.'),
+      ],
+      { claimText: 'The fund distributed 15 million rupees to beneficiaries.' },
+    );
+    expect(hasMaterialConflict(conflicts)).toBe(true);
+  });
 });
