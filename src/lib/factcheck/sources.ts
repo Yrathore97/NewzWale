@@ -49,6 +49,20 @@ const TIER1_SUFFIXES = [
  *  absent falls back to tier 3 - the conservative default, since an unknown
  *  publisher cannot on its own establish a high-confidence verdict. */
 const PROFILES: SourceProfile[] = [
+  // Tier 1 — official bodies whose domain the suffix rule cannot reach.
+  //
+  // The Reserve Bank of India publishes on rbi.org.in, and `.org.in` is an
+  // OPEN registration: any organisation can hold one. It therefore must never
+  // become a TIER1_SUFFIX — that would hand tier 1, the strongest provenance
+  // signal we have, to every NGO, campaign group and hobby site in the .in
+  // space. A curated per-domain entry is the only safe way to reach it.
+  //
+  // Found in production: a check of "the RBI held the repo rate at 6.5 percent"
+  // classified rbi.org.in as TIER 3, so the central bank counted as a
+  // low-reliability source on its own policy rate — unable, by the tier floor
+  // in gate.ts, to help establish a verdict about itself.
+  { domain: 'rbi.org.in', displayName: 'Reserve Bank of India', tier: 'tier1' },
+
   // Tier 2 — established newsrooms with corrections policies.
   { domain: 'thehindu.com', displayName: 'The Hindu', tier: 'tier2', ownerGroup: 'kasturi' },
   { domain: 'indianexpress.com', displayName: 'The Indian Express', tier: 'tier2' },
