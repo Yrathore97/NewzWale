@@ -73,8 +73,28 @@
  *
  *      Both validations are DEMOTE-ONLY and neither grants a verdict: the
  *      corroboration, tier and strength floors are untouched, and the claim
- *      above still returns UNVERIFIED - now for the honest reason. */
-export const PIPELINE_VERSION = 5;
+ *      above still returns UNVERIFIED - now for the honest reason.
+ *
+ *  6 = Numeric contradiction is anchored to the claim. `unit` was the only
+ *      guard on which figures could be compared, and every percentage shares
+ *      one unit - so a policy rate was compared with an inflation rate.
+ *      MEASURED in production on "the RBI held the repo rate at 6.5 percent":
+ *      44 material disagreements, e.g. "newsonair.gov.in reports 6.5 percent
+ *      where pib.gov.in reports 2.6%", vetoing the verdict through RULE 2
+ *      despite a tier-1 source supporting the claim.
+ *
+ *      Now only units the claim ASSERTS are compared, and each source
+ *      contributes one figure per asserted quantity (the value nearest the
+ *      claim's). A claim stating no quantity gets no numeric conflicts at
+ *      all - which is the root-cause fix for the Agra-Lucknow veto that v5
+ *      only worked around.
+ *
+ *      Deliberately paraphrase-blind: a wording-similarity filter was tried
+ *      and rejected because it silently re-breaks the documented case the
+ *      wide net exists for ("disbursements totalled" vs "the fund
+ *      distributed"). Both that case and a genuine disagreement about the
+ *      claimed figure are pinned by tests. */
+export const PIPELINE_VERSION = 6;
 
 /** Retrieval and evidence characterisation.
  *
