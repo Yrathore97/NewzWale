@@ -9,6 +9,7 @@ import {
   extractQualifiers,
   boilerplateRatio,
   isAssertion,
+  searchQuery,
 } from '../../src/lib/factcheck/claim';
 
 describe('extractClaim — the governing rule: never invent a claim', () => {
@@ -149,5 +150,54 @@ describe('boilerplateRatio', () => {
 
   it('treats empty input as fully boilerplate', () => {
     expect(boilerplateRatio('')).toBe(1);
+  });
+});
+
+describe('searchQuery', () => {
+  it('drops a trailing contrastive clause so retrieval targets the assertion', () => {
+    // The live case this exists for: the trailing clause is what the claim
+    // DENIES, and searching it skews results toward the denied party.
+    expect(
+      searchQuery(
+        'The Agra Lucknow Expressway was built by the state government of Uttar Pradesh, not the BJP government.',
+      ),
+      // Terminal punctuation goes with the dropped clause. Irrelevant to a
+      // keyword engine, and this string is never shown to a reader.
+    ).toBe('The Agra Lucknow Expressway was built by the state government of Uttar Pradesh');
+  });
+
+  it('handles the other contrastive connectives', () => {
+    expect(searchQuery('Rates were held at 6.5 per cent, rather than cut.')).toBe(
+      'Rates were held at 6.5 per cent',
+    );
+    expect(searchQuery('The bridge opened in 2016, and not in 2018.')).toBe(
+      'The bridge opened in 2016',
+    );
+  });
+
+  it('keeps a MID-sentence contrastive clause', () => {
+    // "not B" here is followed by more claim. Trimming to the end would search
+    // for a different proposition than the one submitted.
+    const claim = 'The plant, not the depot, was shut in July.';
+    expect(searchQuery(claim)).toBe(claim);
+  });
+
+  it('leaves a claim with no contrastive clause untouched', () => {
+    const claim = 'The Reserve Board held the benchmark rate at 6.5 per cent.';
+    expect(searchQuery(claim)).toBe(claim);
+  });
+
+  it('never trims into something too short to search with', () => {
+    // Trimming would leave "It ran", which retrieves nothing useful.
+    expect(searchQuery('It ran, not walked')).toBe('It ran, not walked');
+  });
+
+  it('respects the length cap', () => {
+    expect(searchQuery('a'.repeat(500), 300)).toHaveLength(300);
+  });
+
+  it('does not treat a plain "not" as a clause boundary', () => {
+    const claim = 'The scheme did not disburse the funds.';
+    expect(searchQuery(claim)).toBe(claim);
   });
 });

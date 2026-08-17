@@ -248,4 +248,49 @@ describe('contradiction between sources', () => {
     ]);
     expect(conflicts.length).toBeLessThanOrEqual(2);
   });
+
+  // ── Materiality vs detection ──────────────────────────────────────────
+  // Detection keeps its wide net; only the VETO is narrowed. See the
+  // `corroboratingPositions` note in contradiction.ts.
+
+  it('downgrades to minor when NEITHER side cleared the corroboration bar', () => {
+    // The live Agra-Lucknow shape: three pages measuring different things,
+    // none of which counted toward corroboration, reported to the reader as
+    // credible sources materially disagreeing - and vetoing the verdict.
+    const items = [
+      ev('a.example', 'The road is 302 km long.'),
+      ev('b.example', 'The stretch is 49 km long.'),
+    ];
+    const conflicts = detectSourceConflicts(items, {
+      relevantPositions: new Set(items.map((i) => i.position)),
+      corroboratingPositions: new Set<number>(), // neither counted
+    });
+
+    // Still DETECTED - nothing is hidden.
+    expect(conflicts.length).toBeGreaterThan(0);
+    // But it can no longer forbid a verdict.
+    expect(hasMaterialConflict(conflicts)).toBe(false);
+  });
+
+  it('keeps material when ONE side cleared the corroboration bar', () => {
+    // The case pipeline.ts's wide detection net exists for: a weakly-relevant
+    // source disagreeing with one that counts is a real finding.
+    const items = [
+      ev('a.example', 'The fund distributed 15 million rupees.'),
+      ev('b.example', 'Disbursements totalled 10 million rupees.'),
+    ];
+    const conflicts = detectSourceConflicts(items, {
+      relevantPositions: new Set(items.map((i) => i.position)),
+      corroboratingPositions: new Set([items[0]!.position]),
+    });
+    expect(hasMaterialConflict(conflicts)).toBe(true);
+  });
+
+  it('is unchanged when corroboratingPositions is omitted', () => {
+    const conflicts = detectSourceConflicts([
+      ev('a.example', 'The fund distributed 15 million rupees.'),
+      ev('b.example', 'Disbursements totalled 10 million rupees.'),
+    ]);
+    expect(hasMaterialConflict(conflicts)).toBe(true);
+  });
 });

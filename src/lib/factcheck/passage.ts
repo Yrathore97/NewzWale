@@ -47,6 +47,26 @@ const ENTITIES: Record<string, string> = {
   '&rsquo;': '’', '&lsquo;': '‘', '&ldquo;': '“', '&rdquo;': '”',
 };
 
+/** ONE HTML tag, quote-aware — as a source string so it can be composed into
+ *  larger patterns as well as used on its own.
+ *
+ *  The naive `<[^>]*>` ends a tag at the FIRST `>`, including one inside a
+ *  quoted attribute value. That is not a theoretical concern: Wikipedia's
+ *  Parsoid HTML carries a page's entire infobox and citation wikitext in a
+ *  SINGLE-quoted `data-mw='{"parts":[...]}'` attribute whose JSON payload
+ *  contains both `>` characters and nested double quotes. On the live
+ *  Agra–Lucknow Expressway article that attribute is ~1,200 characters long.
+ *
+ *  Consuming a quoted string as one unit — either quote style, `>` included —
+ *  keeps that payload inside the tag where it belongs. Both quote forms are
+ *  listed because the failing attribute used single quotes around JSON that
+ *  used double quotes internally. */
+const TAG_SOURCE = String.raw`<(?:[^>"']|"[^"]*"|'[^']*')*>`;
+const TAG_RE = new RegExp(TAG_SOURCE, 'g');
+/** The attribute-scanning half of a tag: everything up to the closing `>`,
+ *  quoted values consumed whole. */
+const ATTRS = String.raw`(?:[^>"']|"[^"]*"|'[^']*')*`;
+
 function decodeEntities(text: string): string {
   return text
     .replace(/&[a-z]+;|&#\d+;/gi, (m) => {
@@ -70,16 +90,25 @@ export function stripChrome(html: string): string {
   for (const tag of STRIP_ELEMENTS) {
     out = out.replace(new RegExp(`<${tag}\\b[\\s\\S]*?</${tag}>`, 'gi'), ' ');
     // Unclosed tags are common in real HTML; drop the opening tag too.
-    out = out.replace(new RegExp(`<${tag}\\b[^>]*/?>`, 'gi'), ' ');
+    out = out.replace(new RegExp(`<${tag}\\b${ATTRS}/?>`, 'gi'), ' ');
   }
 
   out = out.replace(/<!--[\s\S]*?-->/g, ' ');
 
   // Divs/sections carrying a chrome class or id, with their contents.
+  //
+  // ATTRS rather than `[^>]*` on BOTH sides of the class/id capture. With the
+  // naive form this pattern was the specific thing that leaked Wikipedia's
+  // `data-mw` payload: it ended the opening tag at the first `>` inside that
+  // attribute's JSON, and then the non-chrome branch below re-emitted the
+  // mangled remainder as if it were prose. Confirmed against the live article.
   out = out.replace(
-    /<(div|section|ul|ol|li|span)\b[^>]*(?:class|id)\s*=\s*["']([^"']*)["'][^>]*>([\s\S]*?)<\/\1>/gi,
+    new RegExp(
+      `<(div|section|ul|ol|li|span)\\b${ATTRS}?(?:class|id)\\s*=\\s*["']([^"']*)["']${ATTRS}>([\\s\\S]*?)</\\1>`,
+      'gi',
+    ),
     (match, _tag, attr: string, inner: string) =>
-      CHROME_PATTERNS.test(attr) ? ' ' : match.replace(/<[^>]+>/g, ' ') + ' ' + inner,
+      CHROME_PATTERNS.test(attr) ? ' ' : match.replace(TAG_RE, ' ') + ' ' + inner,
   );
 
   return out;
@@ -92,7 +121,7 @@ export function toBlocks(html: string): string[] {
     // Block-level elements become paragraph boundaries.
     .replace(/<\/(p|div|section|article|h[1-6]|li|tr|blockquote|figcaption)>/gi, '\n\n')
     .replace(/<br\s*\/?>/gi, '\n')
-    .replace(/<[^>]+>/g, ' ');
+    .replace(TAG_RE, ' ');
 
   return decodeEntities(withBreaks)
     .split(/\n{2,}/)

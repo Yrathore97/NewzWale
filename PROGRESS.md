@@ -9,6 +9,93 @@ Full task list and rationale: `docs/superpowers/plans/2026-08-05-newzwale-rebuil
 
 ---
 
+## Status — Fact-check evidence retrieval: four defects found and fixed (PR #31, branch `claude/news-api-provider-eval-a6a028`)
+
+**NOT MERGED, NOT DEPLOYED.** Four commits on
+`claude/news-api-provider-eval-a6a028`, pushed, open as PR #31 against `main`.
+`main` is untouched and the live site still runs pre-session code. Deploy still
+needs `CLOUDFLARE_API_TOKEN` (§17 blocker, unchanged).
+
+**1098 tests pass** (1074 + 24 new), `astro check` 0/0/0, build PASS, golden
+set 15/15 with no verdict flips.
+
+### The reported symptom
+
+"When I do a fact check it shows an evidence list but nothing on the evidence
+bar, and still says unverified." Investigated against a real claim — *"The Agra
+Lucknow Expressway was built by the state government of Uttar Pradesh, not the
+BJP government"* — using live Tavily + Google Fact Check credentials. Four
+genuine defects, all in RETRIEVAL and CONTRADICTION handling. None in the gate.
+
+1. **Query targeting** (`faa054d`). The claim was sent to search verbatim, so
+   the trailing clause it REFUTES ("not the BJP government") was weighted like
+   any other keyword and pulled results toward the denied party. A trailing
+   contrastive clause is now dropped before retrieval; Tavily's pool went 5→8.
+   `extracted.text` is unchanged, so nothing downstream judges a different
+   claim.
+2. **Cache identity not bumped** (`8f09ed8`). #1 changed what is retrieved
+   without moving a version constant, so every previously-checked claim would
+   have kept serving its pre-fix verdict and the fix would have looked inert.
+   Exactly the failure `version.ts` already documents against PIPELINE_VERSION
+   3. EVIDENCE_VERSION 3→4.
+3. **HTML attribute payloads leaking in as article text** (`17d89ba`).
+   Wikipedia's Parsoid HTML stores a page's infobox and citation wikitext in a
+   SINGLE-quoted `data-mw='{...}'` attribute whose JSON contains both `>` and
+   nested double quotes (~1,200 chars on the article in question). The naive
+   `<[^>]+>` tag strip — in THREE separate copies — ended the tag inside that
+   JSON, and `stripChrome`'s non-chrome branch re-emitted the remainder as
+   prose. The stance classifier was handed `{{cite news|...}}"},"state":...`
+   and correctly returned "unclear", so a relevant source contributed nothing.
+   Fixed with one shared quote-aware pattern. Also excludes a measured
+   junk-domain list from Tavily. EVIDENCE_VERSION 4→5.
+4. **Unqualified disagreements vetoing every verdict** (`b1af356`). gate.ts
+   RULE 2 forbids an assertive verdict on a material contradiction and runs
+   BEFORE every corroboration floor, but two paths reached it unvalidated. The
+   live claim collected FOUR spurious vetoes: three numeric conflicts between
+   pages measuring different roads (302 km vs 8.3 km vs 49.96 km — a different
+   2025 project), none of which counted toward corroboration; and one
+   model-reported contradiction citing a single source whose text actually
+   SUPPORTED the claim. Now: a numeric conflict where neither side cleared the
+   corroboration bar is `minor`; a model contradiction naming fewer than two
+   distinct sources is `minor`. Both demote-only. PIPELINE_VERSION 4→5.
+
+### Architectural decisions recorded
+
+- **Evidence sourcing stays Google Fact Check + Tavily.** Noozra and raw Google
+  Search were both evaluated and DECLINED by the user this session. Noozra
+  re-aggregates outlets under sub-brand labels, which corrupts independent-source
+  counting; raw Search has no gating (its top source for this very claim was a
+  political party's own site). Do not re-propose either without new reasoning.
+- **No new dependency was added.** The junk-domain fix uses Tavily's existing
+  `exclude_domains` request field, not a new provider.
+- **No floor, tier rule or verdict semantic was weakened.** Every fix is
+  demote-only or retrieval-only. This was checked deliberately, because three
+  of the four fixes make assertive verdicts *more* reachable.
+
+### Outcome, stated honestly
+
+The test claim **still returns UNVERIFIED**, and that is correct — 1 independent
+supporting domain against a floor of 2. What changed is that the reason is now
+true: a single `insufficient_corroboration` ("No independent source established
+this claim either way") instead of four fabricated "credible sources materially
+disagree" findings about three different roads. Evidence strength moved
+`none` → `weak`; `upeida.up.gov.in` (tier1) is now retrieved and supporting,
+and Wikipedia now yields real prose.
+
+### Known-remaining, NOT fixed
+
+- **Retrieval is topic-scoped, not event-scoped.** A 2025 expressway-expansion
+  article is still retrieved for a claim about a 2016 construction. The
+  contradiction fix stops it vetoing, but it still occupies an evidence slot.
+  A real fix needs the pipeline to reason about whether two sources describe
+  the same event before comparing their figures. Unscoped, unbuilt.
+- **The model reads "UPEIDA" as distinct from "the state government of UP"**,
+  when UPEIDA is a UP state authority. Visible in the summary text. Fixing it
+  means touching `prompt.ts`, which §5 flags as high-risk; deliberately not
+  attempted, and note it was NOT what blocked this claim.
+
+---
+
 ## Status — Cron ingestion live; /trending, /search, /news/[slug] now have real data
 
 Built on the D1 activation (`5be9d21`) and the fact-check banner fix

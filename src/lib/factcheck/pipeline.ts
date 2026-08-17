@@ -25,7 +25,7 @@ import { detectSourceConflicts } from './contradiction';
 import { buildFactCheckPrompt } from './prompt';
 import { parseProposal, invalidProposal } from './parse';
 import { profileFor, normalizeDomain, detectSyndication } from './sources';
-import { extractClaim } from './claim';
+import { extractClaim, searchQuery } from './claim';
 import { EVIDENCE_VERSION, MODEL, PIPELINE_VERSION } from './version';
 import type { CertifiedReview } from './google';
 import type { SearchHit } from './search';
@@ -223,7 +223,9 @@ export async function runFactCheck(
     };
   }
 
-  const query = extracted.text.slice(0, QUERY_CHARS);
+  // Retrieval-only. `extracted.text` remains the claim everything downstream
+  // is judged against — see the note on `searchQuery`.
+  const query = searchQuery(extracted.text, QUERY_CHARS);
 
   // ── Stage 2. Retrieval — BOTH paths, in parallel. ──────────────────────
   const [reviewsResult, passagesResult] = await Promise.allSettled([
@@ -389,7 +391,17 @@ export async function runFactCheck(
   const conflictEligible = new Set(
     items.filter((i) => (i.relevanceLevel ?? 'none') !== 'none').map((i) => i.position),
   );
-  const sourceConflicts = detectSourceConflicts(items, { relevantPositions: conflictEligible });
+  // The stricter set that governs MATERIALITY rather than detection: a
+  // disagreement between two sources that both failed the corroboration bar
+  // is a fact about those pages, not about the claim. See the option's note
+  // in contradiction.ts for the live case this was measured on.
+  const corroborationEligible = new Set(
+    items.filter((i) => i.relevant !== false).map((i) => i.position),
+  );
+  const sourceConflicts = detectSourceConflicts(items, {
+    relevantPositions: conflictEligible,
+    corroboratingPositions: corroborationEligible,
+  });
 
   const gateProposal: VerdictProposal = {
     ...proposal,

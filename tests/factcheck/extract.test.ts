@@ -24,6 +24,28 @@ describe('extractReadableText', () => {
     const html = `<p>${'word '.repeat(5000)}</p>`;
     expect(extractReadableText(html).length).toBeLessThanOrEqual(4000);
   });
+
+  it('does not leak a quoted attribute value containing raw ">" characters', () => {
+    // Reproduces a real fetch of a Wikipedia article: Parsoid HTML stores a
+    // <ref> citation's original wikitext in a data-mw attribute, unescaped
+    // "<"/">" and all, inside otherwise-normal double quotes. A naive
+    // `<[^>]+>` strip ends the tag at that internal ">" and lets the rest of
+    // the attribute (raw template markup, then real prose) through as text.
+    const html =
+      '<sup data-mw="{&quot;body&quot;:&quot;{{cite news|url=x}}</ref>&quot;,&quot;state&quot;:{&quot;wt&quot;:&quot;Uttar Pradesh&quot;}}">[1]</sup>' +
+      '<p>The expressway opened to traffic in November 2016.</p>';
+    const out = extractReadableText(html);
+    expect(out).not.toContain('cite news');
+    expect(out).not.toContain('"state"');
+    // "[1]" is the <sup> footnote marker's own visible text - legitimately
+    // preserved. Only the data-mw attribute payload must be gone.
+    expect(out).toBe('[1] The expressway opened to traffic in November 2016.');
+  });
+
+  it('still strips an ordinary tag whose attribute has no internal ">"', () => {
+    const html = '<a href="https://example.com/a?x=1&y=2" title="A link">Read more</a>';
+    expect(extractReadableText(html)).toBe('Read more');
+  });
 });
 
 describe('isPrivateHost', () => {

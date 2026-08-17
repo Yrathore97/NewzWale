@@ -53,8 +53,28 @@
  *  The bump is MANDATORY, not cosmetic. Verdicts cached under version 1 were
  *  produced by a system that could not express partly_true or needs_context
  *  and would call a tier-3-only claim "verified". Serving one today would
- *  publish a conclusion this system would no longer reach. */
-export const PIPELINE_VERSION = 4;
+ *  publish a conclusion this system would no longer reach.
+ *
+ *  5 = Contradiction materiality is now validated deterministically before it
+ *      can veto. gate.ts itself is UNCHANGED, but two inputs to its RULE 2
+ *      are:
+ *        - a numeric disagreement where NEITHER side cleared the corroboration
+ *          bar is 'minor', not 'material' (contradiction.ts);
+ *        - a model-reported contradiction naming fewer than two distinct
+ *          sources is 'minor', not 'material' (parse.ts).
+ *      RULE 2 runs ahead of every corroboration floor, so both were able to
+ *      forbid a verdict outright. Measured live: one claim collected four
+ *      'material' vetoes - three from pages measuring different roads
+ *      (302 km vs 8.3 km vs 49.96 km), none of which counted toward
+ *      corroboration, and one from a single-source model finding whose text
+ *      SUPPORTED the claim. The same evidence now reaches the floors instead,
+ *      so by this file's own rule ("anything that could make the same evidence
+ *      yield a different verdict") the version had to move.
+ *
+ *      Both validations are DEMOTE-ONLY and neither grants a verdict: the
+ *      corroboration, tier and strength floors are untouched, and the claim
+ *      above still returns UNVERIFIED - now for the honest reason. */
+export const PIPELINE_VERSION = 5;
 
 /** Retrieval and evidence characterisation.
  *
@@ -68,10 +88,39 @@ export const PIPELINE_VERSION = 4;
  *      block-level passage selection instead of the first N characters;
  *      deduplication before counting. The evidence SET for a given claim is
  *      materially different, so entries from version 2 must not be served.
+ *  4 = Retrieval targeting. The query sent to providers is no longer the claim
+ *      verbatim: a TRAILING contrastive clause is dropped, so "X was built by
+ *      A, not B" is retrieved as "X was built by A" instead of pulling pages
+ *      about B. Tavily's candidate pool also went 5 -> 8. Both change WHAT IS
+ *      RETRIEVED for a given claim — squarely the "source count / what we
+ *      retrieve" trigger above — so version 3 entries must not be served.
+ *
+ *      Nothing about how evidence is JUDGED changed; a v3 verdict is not
+ *      wrong, it was simply reached over a thinner evidence set. It is still
+ *      made unreachable, because the two cannot be told apart from a cache key.
+ *  5 = Two more retrieval-shape changes, found together while verifying #4
+ *      against a live claim:
+ *      - Both `extract.ts`'s `extractReadableText` AND `passage.ts`'s
+ *        `toBlocks` could leak a quoted HTML attribute's contents as prose
+ *        when the value contained a raw `>` - real on Wikipedia, whose
+ *        Parsoid HTML stores a `<ref>` citation's original wikitext in
+ *        `data-mw="..."`. `passage.ts` is the path a full-page read
+ *        actually takes (it reads raw HTML directly, ahead of and
+ *        independent of `extract.ts`'s own stripper), and its copy of the
+ *        same naive tag-strip regex was the one a live request actually
+ *        hit: the passage handed to stance classification was template
+ *        markup and JSON-shaped metadata, not article text. Both fixed with
+ *        the same quote-aware tag strip.
+ *      - Tavily now excludes a short, MEASURED list of domains
+ *        (facebook.com, scribd.com, magicbricks.com, etc. - see search.ts)
+ *        that occupied evidence slots on a live claim without ever
+ *        contributing a usable stance.
+ *      Both change WHAT IS RETRIEVED AND READ for a given claim; neither
+ *      touches the gate, the prompt or the verdict enum.
  *
  *  Same rule as PIPELINE_VERSION: bumping makes affected entries unreachable
  *  rather than re-labelling them. */
-export const EVIDENCE_VERSION = 3;
+export const EVIDENCE_VERSION = 5;
 
 /** Workers AI model backing stage 3.
  *

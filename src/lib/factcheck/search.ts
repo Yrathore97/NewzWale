@@ -29,7 +29,38 @@ export interface SearchHit {
 }
 
 const ENDPOINT = 'https://api.tavily.com/search';
-const MAX_RESULTS = 5;
+
+/** Domains excluded from Tavily results.
+ *
+ *  MEASURED, not guessed - both categories were seen occupying evidence
+ *  slots on a real claim without ever contributing a usable stance:
+ *
+ *    - Social platforms require a login to render their actual content, so
+ *      `fetchArticle` gets a logged-out shell, not the post. Facebook did
+ *      exactly this on the live run this list was built from: retrieved,
+ *      fetched in full, `relevanceLevel: 'none'` - a wasted slot every time.
+ *    - Document/listing aggregators (Scribd, MagicBricks) surface pages
+ *      that mention a topic without asserting anything about it - a PDF
+ *      upload, a real-estate listing referencing a nearby expressway. Both
+ *      were retrieved, both scored low relevance, neither corroborated.
+ *
+ *  With MAX_SOURCES capped at 6, every slot one of these fills is a slot a
+ *  source that could actually settle the claim does not get. */
+const EXCLUDED_DOMAINS = [
+  'facebook.com',
+  'instagram.com',
+  'twitter.com',
+  'x.com',
+  'scribd.com',
+  'magicbricks.com',
+];
+/** Raised from 5. `pipeline.ts` still caps total evidence shown at
+ *  `MAX_SOURCES` (6) — this only widens the candidate pool Tavily ranks
+ *  before that cap is applied, so a source that directly addresses a narrow
+ *  sub-fact (e.g. "who governed when X was built") has more chance of
+ *  surviving into the final 6 instead of being pushed out by generic
+ *  coverage of the same topic. */
+const MAX_RESULTS = 8;
 
 export function parseTavilyResults(raw: any): SearchHit[] {
   const results = Array.isArray(raw?.results) ? raw.results : [];
@@ -63,6 +94,7 @@ export async function search(apiKey: string, query: string): Promise<SearchHit[]
         query,
         max_results: MAX_RESULTS,
         search_depth: 'basic',
+        exclude_domains: EXCLUDED_DOMAINS,
       }),
     });
 

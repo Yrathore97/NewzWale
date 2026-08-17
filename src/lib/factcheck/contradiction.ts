@@ -65,6 +65,32 @@ function numberConflict(
 export interface DetectConflictsOptions {
   /** Only compare sources that actually engage the claim. */
   relevantPositions?: Set<number>;
+  /** Positions that cleared the CORROBORATION relevance bar.
+   *
+   *  Deliberately a SECOND, stricter set than `relevantPositions`. Conflict
+   *  DETECTION keeps the wide net documented in pipeline.ts - a source that
+   *  scored only 'low' because it paraphrased the claim's verb must still be
+   *  able to disagree with a source that counts. What this set governs is
+   *  MATERIALITY, which is a different question: whether a disagreement is
+   *  strong enough to forbid any verdict at all.
+   *
+   *  When BOTH sides of a numeric disagreement failed the corroboration bar,
+   *  we are comparing figures from two pages we do not trust to be about the
+   *  claim in the first place. Their disagreement is evidence about them, not
+   *  about the claim.
+   *
+   *  MEASURED, not hypothetical. On a live check of "the Agra-Lucknow
+   *  Expressway was built by the state government of UP", all three numeric
+   *  conflicts were between sources that ALL scored 'low' and none of which
+   *  counted: 302 km (the expressway) vs 8.3 km vs 49.96 km (a different 2025
+   *  corridor project). Three pages measuring three different things were
+   *  reported to the reader as credible sources materially disagreeing, and
+   *  the gate's RULE 2 - which runs BEFORE the corroboration floors - vetoed
+   *  the verdict on it. Noise outranked signal.
+   *
+   *  Omitted entirely: every conflict keeps the materiality it computes, i.e.
+   *  the previous behaviour. */
+  corroboratingPositions?: Set<number>;
 }
 
 /** Finds disagreements between evidence passages.
@@ -84,6 +110,14 @@ export function detectSourceConflicts(
   );
 
   const conflicts: SourceConflict[] = [];
+
+  /** True when NEITHER side cleared the corroboration bar. See the option's
+   *  own note: such a pair disagrees about pages, not about the claim. Can
+   *  only ever DEMOTE - it never promotes a minor conflict to material. */
+  const bothBelowCorroborationBar = (posA: number, posB: number): boolean =>
+    options.corroboratingPositions !== undefined &&
+    !options.corroboratingPositions.has(posA) &&
+    !options.corroboratingPositions.has(posB);
 
   for (let i = 0; i < usable.length; i += 1) {
     for (let j = i + 1; j < usable.length; j += 1) {
@@ -110,7 +144,9 @@ export function detectSourceConflicts(
             evidenceB: b.position,
             conflictType: 'number',
             point: `${a.publisher} reports ${an.raw} where ${b.publisher} reports ${bn.raw}`,
-            materiality: conflict.materiality,
+            materiality: bothBelowCorroborationBar(a.position, b.position)
+              ? 'minor'
+              : conflict.materiality,
             resolutionStatus: 'unresolved',
             valueA: an.raw,
             valueB: bn.raw,
