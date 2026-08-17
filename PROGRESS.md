@@ -9,12 +9,26 @@ Full task list and rationale: `docs/superpowers/plans/2026-08-05-newzwale-rebuil
 
 ---
 
-## Status — Fact-check evidence retrieval: four defects found and fixed (PR #31, branch `claude/news-api-provider-eval-a6a028`)
+## Status — Fact-check retrieval fixes MERGED AND LIVE; CI now auto-deploys
 
-**NOT MERGED, NOT DEPLOYED.** Four commits on
-`claude/news-api-provider-eval-a6a028`, pushed, open as PR #31 against `main`.
-`main` is untouched and the live site still runs pre-session code. Deploy still
-needs `CLOUDFLARE_API_TOKEN` (§17 blocker, unchanged).
+**Deployed to production.** PR #31 merged to `main` as `15342e8` and shipped
+(Worker version `35f184b1-6fbb-448d-89e6-8c86fe55ef53`). Verified against the
+live site: `https://www.newzwale.com/api/v1/factcheck` returns
+`pipelineVersion 5 / evidenceVersion 5` with a single honest
+`insufficient_corroboration` and no fabricated contradictions.
+
+**Deploy was never actually blocked.** Prior notes said it needed
+`CLOUDFLARE_API_TOKEN`; that env var is indeed unset, but `wrangler` is
+authenticated by **OAuth** (`workers_scripts: write`, `d1: write`). Check
+`npx wrangler whoami` before recording a deploy blocker again. All four API
+keys were already present as Worker secrets — `.dev.vars` is local-only and is
+not what production reads.
+
+**Releases are now automatic** (`claude/ci-auto-deploy`, closes P-14):
+`.github/workflows/deploy.yml` runs `npx wrangler deploy` after the existing
+audit/test/check/build gate, restricted to `push` events on `main` so a
+pull_request run can never publish unreviewed or fork-authored code. **Merging
+to `main` is now a release.**
 
 **1098 tests pass** (1074 + 24 new), `astro check` 0/0/0, build PASS, golden
 set 15/15 with no verdict flips.
