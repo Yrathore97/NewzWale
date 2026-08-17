@@ -138,9 +138,18 @@ export const PIPELINE_VERSION = 6;
  *      Both change WHAT IS RETRIEVED AND READ for a given claim; neither
  *      touches the gate, the prompt or the verdict enum.
  *
+ *  6 = Source tier correction. The Reserve Bank of India publishes on
+ *      rbi.org.in, which no TIER1_SUFFIX reaches (`.org.in` is open
+ *      registration and must never become one), so it was classified tier3 -
+ *      the central bank counted as low-reliability on its own policy rate,
+ *      and the tier floor in gate.ts would not let it establish a verdict.
+ *      Added as a curated profile. "Source tiers" is named explicitly in the
+ *      bump rule above, and the same claim can now clear a floor it could
+ *      not before.
+ *
  *  Same rule as PIPELINE_VERSION: bumping makes affected entries unreachable
  *  rather than re-labelling them. */
-export const EVIDENCE_VERSION = 5;
+export const EVIDENCE_VERSION = 6;
 
 /** Workers AI model backing stage 3.
  *
