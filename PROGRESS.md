@@ -9,13 +9,59 @@ Full task list and rationale: `docs/superpowers/plans/2026-08-05-newzwale-rebuil
 
 ---
 
-## Status — Fact-check retrieval fixes MERGED AND LIVE; CI now auto-deploys
+## Status — Spurious contradictions eliminated; live at p6/e6 via autopilot
 
-**Deployed to production.** PR #31 merged to `main` as `15342e8` and shipped
-(Worker version `35f184b1-6fbb-448d-89e6-8c86fe55ef53`). Verified against the
-live site: `https://www.newzwale.com/api/v1/factcheck` returns
-`pipelineVersion 5 / evidenceVersion 5` with a single honest
-`insufficient_corroboration` and no fabricated contradictions.
+Current production identity: **`pipelineVersion 6 / evidenceVersion 6`**.
+Six fact-check defects fixed and shipped across PRs #31, #33 and #34, all
+verified against the live site rather than only in unit tests.
+
+### The headline defect (PR #33) — `unit` was the only guard on numeric comparison
+
+`numberConflict` compared two figures whenever `a.unit === b.unit`, and **every
+percentage shares the unit `percent`**. So each figure on each page was compared
+with every figure on every other page: a repo rate against an inflation rate,
+a CRR, a growth number.
+
+Measured in production on *"The RBI held the repo rate at 6.5 percent"*:
+**44 material disagreements**, e.g. `newsonair.gov.in reports 6.5 percent where
+pib.gov.in reports 2.6%`. Because `gate.ts` RULE 2 runs AHEAD of every
+corroboration floor, that pile vetoed the verdict outright despite a tier-1
+source supporting the claim. This was almost certainly the single largest
+source of spurious `unverified` results in the product.
+
+Fixed by anchoring comparison to the claim: only units the claim ASSERTS are
+compared, and each source contributes one figure per asserted quantity (the
+value nearest the claim's). A claim stating no quantity now gets no numeric
+conflicts at all — the root-cause fix for the Agra-Lucknow veto that PR #31
+only worked around.
+
+| Claim | Before | After (production) |
+|---|---|---|
+| RBI repo rate | 44 material contradictions | **0** |
+| Agra-Lucknow | 3 (302 km vs 8.3 km vs 49.96 km — three different roads) | **0** |
+
+**A rejected approach worth not re-attempting:** requiring the source's WORDING
+to resemble the claim's. It silently re-breaks the documented case the wide net
+exists for, where a source disagreeing via "disbursements totalled" rather than
+"the fund distributed" must still be caught. Nearest-value anchoring is
+paraphrase-blind, which is the point. Over-suppression is the dangerous
+direction here — hiding a real contradiction is how a false claim gets through —
+so both that case and a genuine disagreement are pinned as negative controls in
+`tests/factcheck/temporal-contradiction.test.ts`.
+
+### Source tier correction (PR #34)
+
+`rbi.org.in` was **tier3**, so India's central bank counted as a low-reliability
+source on its own policy rate and could not clear `hasCorroboratingTier`. Added
+as a CURATED per-domain profile — deliberately NOT a `TIER1_SUFFIX`, because
+`.org.in` is open registration and a suffix rule would grant tier 1 to any
+organisation holding one. A negative test pins that. Evidence strength on that
+claim moved `weak` → `moderate`.
+
+### Earlier in the same sweep (PR #31)
+
+**Deployed to production**, merged as `15342e8` (Worker version
+`35f184b1-6fbb-448d-89e6-8c86fe55ef53`).
 
 **Deploy was never actually blocked.** Prior notes said it needed
 `CLOUDFLARE_API_TOKEN`; that env var is indeed unset, but `wrangler` is
@@ -96,17 +142,46 @@ disagree" findings about three different roads. Evidence strength moved
 `none` → `weak`; `upeida.up.gov.in` (tier1) is now retrieved and supporting,
 and Wikipedia now yields real prose.
 
-### Known-remaining, NOT fixed
+### Known-remaining, NOT fixed — and why each was left
 
 - **Retrieval is topic-scoped, not event-scoped.** A 2025 expressway-expansion
-  article is still retrieved for a claim about a 2016 construction. The
-  contradiction fix stops it vetoing, but it still occupies an evidence slot.
-  A real fix needs the pipeline to reason about whether two sources describe
-  the same event before comparing their figures. Unscoped, unbuilt.
+  article is still retrieved for a claim about a 2016 construction. Its harmful
+  symptom (false vetoes) is GONE as of PR #33, so what remains is a wasted
+  evidence slot — an efficiency cost, not a correctness one.
+  **Deliberately not attempted.** Every cheap version filters on years, but
+  publication date is not event date, so a 2024 article about a 2016 event gets
+  dropped. That is silently discarding good evidence, which is the same failure
+  direction as the rejected wording-similarity filter above. Needs real design
+  work with the golden set as the guard, not a heuristic.
 - **The model reads "UPEIDA" as distinct from "the state government of UP"**,
   when UPEIDA is a UP state authority. Visible in the summary text. Fixing it
-  means touching `prompt.ts`, which §5 flags as high-risk; deliberately not
-  attempted, and note it was NOT what blocked this claim.
+  means touching `prompt.ts`, which §5 flags as high-risk. Note it was NOT what
+  blocked that claim — an earlier session misdiagnosed it as the cause; the
+  actual blocker was the contradiction veto fixed in PR #33.
+- **`main` carries one misleading commit subject**: `bbe4df7` reads
+  `wip: claim-anchored numeric contradiction (pre-verification) (#33)`. The
+  work WAS verified; a placeholder commit created only to move code between
+  worktrees was used as the squash subject. Correcting it needs a force-push,
+  which branch protection blocks (`allow_force_pushes: false`) — fixing a
+  cosmetic message would mean disabling a protection control on the production
+  branch, which is a worse trade. PR #33 carries the accurate record.
+  **When squash-merging, pass an explicit `commit_title`** (see PR #34) rather
+  than letting a single commit's own subject become main's history.
+
+### Environment traps that cost time this session
+
+- **`preview_start` runs in the WORKTREE**, not in whichever checkout you last
+  edited. Two "verification" runs silently exercised stale code from another
+  branch. The tell was the version identity in the response reading `5/5` when
+  the source said `6`. Always assert the returned `pipelineVersion` /
+  `evidenceVersion` before trusting a local fact-check result.
+- **A local KV cache entry survives a code change within the same version.**
+  Clearing `.wrangler/state/v3/kv` while the dev server is RUNNING crashes it;
+  stop the server first.
+- GitHub's API 503'd repeatedly (both GraphQL and REST writes). `gh pr create`
+  can fail after the branch is already pushed — check with
+  `gh api repos/:owner/:repo/pulls?head=:owner:branch` before assuming nothing
+  was created.
 
 ---
 
