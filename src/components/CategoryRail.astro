@@ -1,5 +1,6 @@
 ---
-import type { Article, NewsPage } from '../lib/news/types';
+import type { Article } from '../lib/news/types';
+import type { ApiArticle } from '../lib/news/read';
 import { prepareArticles } from '../lib/news/feed';
 import { DEFAULT_LANGUAGE } from '../lib/news/languages';
 import ArticleCard from './ArticleCard.astro';
@@ -17,22 +18,68 @@ const { slug, label, language = DEFAULT_LANGUAGE, excludeUrls = [] } = Astro.pro
 
 const RAIL_SIZE = 4;
 
-let articles: Article[] = [];
+/** Reads /api/v1/news (D1), NOT the legacy /api/news.
+ *
+ *  WHY THIS MATTERS FOR A RAIL SPECIFICALLY. /api/news answers from a live
+ *  provider chain (NewsData -> Guardian -> RSS) on a cache miss. RSS is the
+ *  chain's floor for exactly the situation this component is most likely to
+ *  hit — four category-specific rails rendering on one homepage load, right
+ *  when NewsData's shared quota (see wrangler.jsonc's cron note) is under the
+ *  most pressure. `fetchRssFallback()` takes NO category argument: every
+ *  article it returns is hardcoded `category: 'top'`. When the chain falls
+ *  that far, every rail that fell through receives the IDENTICAL undifferen-
+ *  tiated feed and renders it under its own label — Sports, Business,
+ *  Technology and Health all show the same four "top" articles, in the same
+ *  order. Confirmed live, not hypothetical: a design review of the deployed
+ *  site found exactly this.
+ *
+ *  /api/v1/news reads D1 rows already ingested and correctly categorised by
+ *  the scheduled job — it never touches a provider on the read path, so it
+ *  cannot degrade to a shared feed. Confirmed against the live database
+ *  before this change: business/sports/technology/health each have distinct,
+ *  real article counts (from 3 to 263 at time of writing) — thin for a young
+ *  or low-volume category, never wrong.
+ *
+ *  This is also the exact migration read.ts's own module comment anticipates
+ *  ("/api/news is deliberately NOT routed through here... because
+ *  NewsFeed.astro parses that shape today") — that reasoning names
+ *  NewsFeed.astro specifically, not this component. A rail has no "load
+ *  more" pagination contract to preserve. */
+let apiArticles: ApiArticle[] = [];
 try {
   const res = await fetch(
     new URL(
-      `/api/news?category=${encodeURIComponent(slug)}&language=${encodeURIComponent(language)}`,
+      `/api/v1/news?category=${encodeURIComponent(slug)}&language=${encodeURIComponent(language)}&limit=${RAIL_SIZE + excludeUrls.length}`,
       Astro.url,
     ),
   );
-  if (res.ok) articles = ((await res.json()) as NewsPage).articles ?? [];
+  if (res.ok) apiArticles = ((await res.json()) as { data: ApiArticle[] }).data ?? [];
 } catch {
   /* falls through to the empty state below, which is rendered rather than
      vanishing - see the section comment. */
 }
 
+// D1's summary/publishedAt are nullable (a publisher can omit both, and P8's
+// migration made an unknown publish date NULL rather than a guess). `Article`
+// predates that nullability, so this is the same projection ArticleCard
+// already renders elsewhere: an absent summary is an empty string, never
+// invented text, and prepareArticles' date sort already treats an unparsable
+// string as "unknown" — see feed.ts's `time()`.
+const articles: Article[] = apiArticles.map((a) => ({
+  id: a.id,
+  title: a.title,
+  url: a.url,
+  summary: a.summary ?? '',
+  imageUrl: a.imageUrl,
+  source: a.source,
+  category: a.category,
+  publishedAt: a.publishedAt ?? '',
+}));
+
 const exclude = new Set(excludeUrls);
-articles = prepareArticles(articles).filter((a) => !exclude.has(a.url)).slice(0, RAIL_SIZE);
+const rail = prepareArticles(articles)
+  .filter((a) => !exclude.has(a.url))
+  .slice(0, RAIL_SIZE);
 ---
 
 <!-- The rail used to render NOTHING when it had no articles (audit §5.6: the
@@ -60,7 +107,7 @@ articles = prepareArticles(articles).filter((a) => !exclude.has(a.url)).slice(0,
     </div>
 
     {
-      articles.length === 0 ? (
+      rail.length === 0 ? (
         <EmptyState
           title={`No ${label} headlines right now`}
           description={`Publisher feeds returned nothing for ${label.toLowerCase()} in the current window. Other sections on this page are still updating.`}
@@ -69,7 +116,7 @@ articles = prepareArticles(articles).filter((a) => !exclude.has(a.url)).slice(0,
         />
       ) : (
         <ArticleGrid variant="rail">
-          {articles.map((article) => (
+          {rail.map((article) => (
             <ArticleCard article={article} />
           ))}
         </ArticleGrid>

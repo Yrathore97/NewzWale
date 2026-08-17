@@ -21,8 +21,8 @@ export const prerender = false;
   <Navbar />
   <MastheadInfoStrip />
 
-  <main id="main" class="flex-1 py-8 bg-surface-soft">
-    <div class="max-w-[1400px] mx-auto px-4 sm:px-6 mb-4">
+  <main id="main" class="flex-1 py-5 sm:py-8 bg-surface-soft">
+    <div class="max-w-[1400px] mx-auto px-4 sm:px-6 mb-3 sm:mb-4">
       <nav aria-label="Breadcrumb">
         <ol class="flex items-center gap-2 text-xs text-mute font-mono-caption">
           <li><a href="/" class="hover:text-primary-strong">Home</a></li>
@@ -31,17 +31,31 @@ export const prerender = false;
         </ol>
       </nav>
     </div>
-    <div class="max-w-[1400px] mx-auto px-4 sm:px-6 mb-8">
-      <div class="bg-surface-dark text-canvas dark:text-ink rounded-lg p-8 sm:p-12 relative overflow-hidden shadow-stacked-lg border border-transparent">
+    <div class="max-w-[1400px] mx-auto px-4 sm:px-6 mb-5 sm:mb-8">
+      {/* This page exists for one action: getting a claim into the box
+          below. On a 375px-wide phone, the full hero (eyebrow + headline +
+          three-line description) previously pushed the actual input and its
+          submit button entirely below the fold — measured live at 705px and
+          849px from the top on an 812px-tall viewport. The description is
+          real, useful copy, so it is not deleted — it is DEFERRED to `sm:`
+          and up, where vertical space is not the scarce resource. A mobile
+          reader still gets the eyebrow, the headline, and a one-line
+          restatement of the same promise; the full paragraph and the
+          methodology link return once there is room for them without
+          burying the tool. */}
+      <div class="bg-surface-dark text-canvas dark:text-ink rounded-lg p-5 sm:p-12 relative overflow-hidden shadow-stacked-lg border border-transparent">
         <div class="absolute -right-20 -top-20 w-[400px] h-[400px] mesh-gradient-glow opacity-30 pointer-events-none"></div>
         <div class="relative z-10 max-w-3xl">
-          <span class="inline-block px-3 py-1 bg-primary-strong text-on-primary font-mono-caption text-[11px] rounded-full mb-4 font-bold">
+          <span class="inline-block px-3 py-1 bg-primary-strong text-on-primary font-mono-caption text-[11px] rounded-full mb-3 sm:mb-4 font-bold">
             PUBLIC AUDIT ENGINE
           </span>
-          <h1 class="text-3xl sm:text-5xl font-semibold tracking-[-1.5px] leading-tight mb-4">
+          <h1 class="text-2xl sm:text-5xl font-semibold tracking-[-1.5px] leading-tight mb-2 sm:mb-4">
             AI News Verification & Credibility Portal.
           </h1>
-          <p class="text-base text-stone dark:text-body leading-relaxed">
+          <p class="sm:hidden text-sm text-stone dark:text-body leading-snug">
+            Checks published fact-checkers, then live sources — and only issues a verdict the evidence supports.
+          </p>
+          <p class="hidden sm:block text-base text-stone dark:text-body leading-relaxed">
             Verify headlines, viral claims, or article URLs. Our engine checks published fact-checkers first, then live web sources, and only issues a verdict when the evidence supports one — otherwise it says so.
             <a href="/methodology" class="underline hover:no-underline">How this works →</a>
           </p>
