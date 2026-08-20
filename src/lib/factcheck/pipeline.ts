@@ -450,7 +450,13 @@ export async function runFactCheck(
     stanceDemoted: (i.stanceDemotionReasons?.length ?? 0) > 0,
   }));
 
-  const summary = proposal.summary || decision.limitations[0] || '';
+  // A gate override means the model's own summary was written to justify a
+  // verdict that's no longer the one shown — e.g. Rule 8 upgrading a model's
+  // "unverified" to "true" when the model's sentence still says the passages
+  // don't confirm the claim. Trust the gate's reason instead in that case.
+  const summary = decision.overridden
+    ? decision.limitations[0] || ''
+    : proposal.summary || decision.limitations[0] || '';
   const explanation = [summary, ...decision.limitations].filter(Boolean).join(' ');
 
   return {
