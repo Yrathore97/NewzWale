@@ -93,8 +93,19 @@
  *      and rejected because it silently re-breaks the documented case the
  *      wide net exists for ("disbursements totalled" vs "the fund
  *      distributed"). Both that case and a genuine disagreement about the
- *      claimed figure are pinned by tests. */
-export const PIPELINE_VERSION = 6;
+ *      claimed figure are pinned by tests.
+ *
+ *  7 = When gate.ts overrides the model's proposed verdict (e.g. Rule 8
+ *      upgrading an under-confident "unverified" to "true" on strong
+ *      corroboration), the displayed summary is no longer the model's raw
+ *      text - it was written to justify the verdict the model ORIGINALLY
+ *      proposed, not the one the gate settled on. MEASURED live: "The
+ *      Reserve Bank of India increased the repo rate to 6.5% in 2023" came
+ *      back verdict TRUE with a summary reading "the passages do not
+ *      confirm the claim." Same evidence, same gate decision, different
+ *      (and now consistent) text - the exact case this file's own bump
+ *      rule names. */
+export const PIPELINE_VERSION = 7;
 
 /** Retrieval and evidence characterisation.
  *
