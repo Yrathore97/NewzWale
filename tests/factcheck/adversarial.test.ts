@@ -50,6 +50,7 @@ async function run(
     stance?: 'supports' | 'contradicts' | 'neutral' | 'unclear';
     reviews?: CertifiedReview[];
     classify?: boolean;
+    summary?: string;
   } = {},
 ) {
   const proposed = opts.proposed ?? 'true';
@@ -63,7 +64,7 @@ async function run(
       runModel: async () =>
         JSON.stringify({
           verdict: proposed,
-          summary: 'Stub summary.',
+          summary: opts.summary ?? 'Stub summary.',
           reasoning: 'Stub reasoning.',
           temporal: { kind: 'none', detail: '', significance: 'none' },
           context: { kind: 'none', detail: '', significance: 'none' },
@@ -396,6 +397,41 @@ describe('ADVERSARIAL: stance cannot be bought', () => {
     ], { classify: false });
     // Under-claiming rather than over-claiming.
     expect(r.verdict).toBe('unverified');
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
+describe('ADVERSARIAL: gate override must not surface a stale model summary', () => {
+  it('an unverified->true upgrade drops the model summary written for "unverified"', async () => {
+    // The model under-calls it "unverified" and writes a summary saying so,
+    // but three independent, strong, tier-1/2 sources corroborate it — Rule 8
+    // (strong_support_upgrade) overrides the verdict to "true". The summary
+    // shown to the reader must not still say the passages don't confirm it.
+    const r = await run(
+      CLAIM,
+      [
+        passage(
+          'https://rbi.org.in/a',
+          "The Northvale Reserve Board's monetary policy committee voted to lower the repo rate at its August 2026 review, citing easing inflation.",
+        ),
+        passage(
+          'https://thehindu.com/b',
+          "Northvale's central bank trimmed the cost of borrowing this August, marking its first cut in over a year according to Thursday's policy statement from the Reserve Board.",
+        ),
+        passage(
+          'https://indianexpress.com/c',
+          'Interest rates were reduced by the Northvale Reserve Board during August 2026 after its scheduled policy review.',
+        ),
+      ],
+      {
+        proposed: 'unverified',
+        summary: 'The passages do not confirm the claim.',
+      },
+    );
+
+    expect(r.verdict).toBe('true');
+    expect(r.gateOverrode).toBe(true);
+    expect(r.summary).not.toMatch(/do not confirm/i);
   });
 });
 
