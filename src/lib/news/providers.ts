@@ -50,17 +50,42 @@ export interface NewsProvider {
   fetchPage(req: ProviderRequest, keys: ProviderKeys): Promise<NewsPage>;
 }
 
+/** NewsData measured ~40% success from Worker egress IPs against 100% from a
+ *  plain client, same key, same moment (Aug 6 diagnosis, salvaged from the
+ *  retired redesign branch). Retried only when the failure looks transient —
+ *  a network error or 5xx. A 4xx (bad key, plan, rate limit) will not clear
+ *  in 300ms and a retry would spend more of the 200/day quota.
+ *  ponytail: mitigation for shared-egress flakiness, not a fix; if NewsData
+ *  hard-blocks the range, this needs a different egress path. */
+const NEWSDATA_ATTEMPTS = 3;
+const RETRY_DELAY_MS = 300;
+
+async function fetchNewsDataWithRetry(
+  apiKey: string,
+  req: ProviderRequest,
+): Promise<NewsPage> {
+  for (let attempt = 1; ; attempt++) {
+    try {
+      return await fetchNewsData(apiKey, {
+        category: req.category,
+        language: req.language,
+        page: req.page,
+      });
+    } catch (err) {
+      const permanent = err instanceof Error && /^NewsData 4\d\d$/.test(err.message);
+      if (permanent || attempt >= NEWSDATA_ATTEMPTS) throw err;
+      await new Promise((r) => setTimeout(r, RETRY_DELAY_MS));
+    }
+  }
+}
+
 export const newsDataProvider: NewsProvider = {
   id: 'newsdata',
   paginated: true,
   multilingual: true,
   isConfigured: (keys) => Boolean(keys.newsdata),
   async fetchPage(req, keys) {
-    const fresh = await fetchNewsData(keys.newsdata ?? '', {
-      category: req.category,
-      language: req.language,
-      page: req.page,
-    });
+    const fresh = await fetchNewsDataWithRetry(keys.newsdata ?? '', req);
     // An empty result is treated as a failure so the chain falls through,
     // preserving the existing `if (fresh.articles.length > 0) ... throw`
     // behaviour in /api/news.
