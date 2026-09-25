@@ -52,19 +52,55 @@ export async function factCheckCacheKey(claim: string): Promise<string> {
 
 const STALE_TTL = 60 * 60 * 24;
 
+/** KV's minimum expirationTtl. Also a sane ceiling on how long one upstream
+ *  refresh may take before another reader is allowed to try. */
+const REFRESH_LOCK_TTL = 60;
+
+export interface CachedOptions {
+  /** Stale-while-revalidate. When given and the fresh copy has expired but a
+   *  stale one exists, the stale copy is returned immediately and the refresh
+   *  runs in the background. Without it the reader waited on the upstream
+   *  provider — the 2-3s first load after every expiry. */
+  waitUntil?: (p: Promise<unknown>) => void;
+}
+
 export async function cached<T>(
   kv: KVNamespace,
   key: string,
   ttlSeconds: number,
   produce: () => Promise<T>,
+  opts: CachedOptions = {},
 ): Promise<T | null> {
   const hit = await kv.get(key);
   if (hit) return JSON.parse(hit) as T;
 
-  try {
-    const fresh = await produce();
+  const store = async (fresh: T) => {
     await kv.put(key, JSON.stringify(fresh), { expirationTtl: ttlSeconds });
     await kv.put(`${key}:stale`, JSON.stringify(fresh), { expirationTtl: STALE_TTL });
+  };
+
+  if (opts.waitUntil) {
+    const stale = await kv.get(`${key}:stale`);
+    if (stale) {
+      // One refresh per key at a time: every provider call spends shared
+      // daily quota. KV is eventually consistent, so this narrows the window
+      // rather than guaranteeing exclusivity — enough to stop a burst.
+      const lock = `${key}:refreshing`;
+      if (!(await kv.get(lock))) {
+        await kv.put(lock, '1', { expirationTtl: REFRESH_LOCK_TTL });
+        opts.waitUntil(
+          produce().then(store).catch(() => {
+            /* keep serving stale; the next reader after the lock expires retries */
+          }),
+        );
+      }
+      return JSON.parse(stale) as T;
+    }
+  }
+
+  try {
+    const fresh = await produce();
+    await store(fresh);
     return fresh;
   } catch {
     const stale = await kv.get(`${key}:stale`);

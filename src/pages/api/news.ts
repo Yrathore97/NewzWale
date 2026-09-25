@@ -1,5 +1,5 @@
 import type { APIRoute } from 'astro';
-import { env } from 'cloudflare:workers';
+import { env, waitUntil } from 'cloudflare:workers';
 import { getNewsPage } from '../../lib/news/service';
 
 /** Legacy news endpoint.
@@ -24,6 +24,9 @@ export const GET: APIRoute = async ({ url }) => {
       newsdata: (env as unknown as { NEWSDATA_API_KEY?: string }).NEWSDATA_API_KEY ?? '',
       guardian: (env as unknown as { GUARDIAN_API_KEY?: string }).GUARDIAN_API_KEY ?? '',
     },
+    // Serve the stale copy at once and refresh behind the response, instead
+    // of making the first reader after each 20-minute expiry wait 2-3s.
+    { waitUntil },
   );
 
   return new Response(
