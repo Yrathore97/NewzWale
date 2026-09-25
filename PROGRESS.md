@@ -84,7 +84,19 @@ Current production identity: **`pipelineVersion 7 / evidenceVersion 6`**
   `claude/point-at-custom-domain`, `claude/top-bar-navigation-c4b6e6`,
   `claude/update-readme`, `rebuild/two-interface`) and one UNMERGED branch,
   `claude/news-website-redesign-c3de89` (Aug 6, 8 commits) — the owner's
-  call whether to delete or salvage.
+  call whether to delete or salvage. **Resolved:** the 8 merged branches were
+  deleted; the unmerged one was salvaged, not merged (12 conflicting files,
+  104 commits behind, and it would have re-added a second homepage search
+  box). Two pieces were ported and the branch then deleted:
+  - **Nepali (`ne`)** added as the 14th news language. Re-verified on a
+    `wrangler versions upload` preview (production secrets, not deployed):
+    top 10 / india 10 / sports 4 real Nepali articles. Some sources NewsData
+    returns under `country=in` look Nepal-based.
+  - **NewsData retry** in `newsDataProvider`: 3 attempts, 300ms apart, only
+    for network errors and 5xx — never 4xx (bad key/plan/429) and never an
+    empty result. Its "2-minute TTL for fallback results" half was NOT ported:
+    fallbacks only ever serve the English feed (RSS is real Indian content)
+    and stale-while-revalidate already bounds staleness.
 
 ### Environment traps met this session
 
