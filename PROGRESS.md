@@ -9,6 +9,48 @@ Full task list and rationale: `docs/superpowers/plans/2026-08-05-newzwale-rebuil
 
 ---
 
+## Status — Navigation simplified; deps patched; live at p7/e6
+
+Current production identity: **`pipelineVersion 7 / evidenceVersion 6`**
+(supersedes the p6/e6 note below).
+
+- **PR #37 / #38** — a gate override (e.g. Rule 8 `unverified`→`true`) shipped
+  the model's summary written for the verdict it had PROPOSED, so the page read
+  "TRUE" beside "the passages do not confirm the claim". Summary now falls back
+  to the gate's own reason when overridden; PIPELINE_VERSION bumped to 7 so
+  cached pre-fix results became unreachable.
+- **PR #48** — mobile language picker (the masthead select sat ~800px
+  off-screen on phones); publisher-name placeholder when a card image fails.
+- **PR #49** — `npm audit fix` for 11 newly published advisories (1 critical in
+  astro) that failed the S-16 CI gate and so blocked every merge/deploy. Also
+  `@astrojs/cloudflare` 14.1.7→14.3.3: without it `astro dev` crashed on a
+  stale optimized-dep chunk after the upgrade.
+- **Navigation simplification** — one control per job, per device:
+  - Removed `SavedArticlesDrawer`. **Deviation from the implementation plan**,
+    which said to extend it: it was mounted only on `/`, but its "Saved (N)"
+    trigger was in the masthead on every page, so on every other route it was a
+    dead button. `/saved` ("You") is the one saved view.
+  - Masthead strip: removed the duplicate theme toggle and the Saved button;
+    language select is desktop-only (mobile menu has it).
+  - Mobile header: removed the search icon (BottomNav has Search).
+  - Mobile menu: removed the five destinations BottomNav already shows; it now
+    holds language, homepage sections and categories.
+  - Topics: removed the desktop "Customize topics" button + dialog; the
+    homepage sidebar chips are the desktop control, the menu is the mobile one.
+  - Footer: removed the second copy of the company links and the duplicate
+    "Submit a Claim" → /fact-check.
+  - Category strip: no load-time "peek" auto-scroll (both strips); the active
+    category is centred (re-run after `document.fonts.ready`); hide-on-scroll
+    ignores <12px movements and animates from a definite `max-h-12`.
+
+**Still open (decisions, not defects):** /trending is empty — the cluster
+threshold (`cluster.ts`, Jaccard ≥ 0.75, ≥3 shared tokens) almost never yields
+the 2 independent sources trending requires at current ingest volume; the
+Cloudflare Insights beacon is not in CSP `script-src` and will break when CSP
+is enforced; imageless cards have no Save button.
+
+---
+
 ## Status — Spurious contradictions eliminated; live at p6/e6 via autopilot
 
 Current production identity: **`pipelineVersion 6 / evidenceVersion 6`**.

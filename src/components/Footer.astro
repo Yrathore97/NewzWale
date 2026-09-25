@@ -4,7 +4,7 @@ import LogoIcon from './LogoIcon.astro';
 
 <footer class="w-full bg-surface-dark py-8 sm:py-12 text-xs text-stone dark:text-mute transition-colors duration-200">
   <div class="max-w-[1400px] mx-auto px-4 sm:px-6">
-    <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-6 sm:gap-8 mb-8 sm:mb-10">
+    <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6 sm:gap-8 mb-8 sm:mb-10">
 
       <!-- Brand & Mission. This footer stays dark in both site themes, so
            every text colour is the "always-dark-band" pair (light-mode
@@ -22,25 +22,19 @@ import LogoIcon from './LogoIcon.astro';
         </p>
       </div>
 
-      <!-- Column 1: Explore -->
+      <!-- Explore. Each destination appears once: "Submit a Claim" was a second
+           link to /fact-check, and the bottom strip repeated all four
+           company links a second time. -->
       <div>
         <h4 class="font-mono-caption text-ash dark:text-mute mb-2.5 sm:mb-3 font-semibold">EXPLORE</h4>
         <ul class="space-y-2 text-xs">
           <li><a href="/" class="text-stone dark:text-mute hover:text-canvas dark:hover:text-ink transition-colors">News</a></li>
           <li><a href="/fact-check" class="text-stone dark:text-mute hover:text-canvas dark:hover:text-ink transition-colors">Fact Check</a></li>
-        </ul>
-      </div>
-
-      <!-- Column 2: Fact Check -->
-      <div>
-        <h4 class="font-mono-caption text-ash dark:text-mute mb-2.5 sm:mb-3 font-semibold">FACT CHECK</h4>
-        <ul class="space-y-2 text-xs">
-          <li><a href="/fact-check" class="text-stone dark:text-mute hover:text-canvas dark:hover:text-ink transition-colors">Submit a Claim</a></li>
           <li><a href="/methodology" class="text-stone dark:text-mute hover:text-canvas dark:hover:text-ink transition-colors">Verification Methodology</a></li>
         </ul>
       </div>
 
-      <!-- Column 3: Legal & Company -->
+      <!-- Legal & Company -->
       <div>
         <h4 class="font-mono-caption text-ash dark:text-mute mb-2.5 sm:mb-3 font-semibold">LEGAL & COMPANY</h4>
         <ul class="space-y-2 text-xs">
@@ -62,12 +56,6 @@ import LogoIcon from './LogoIcon.astro';
         <div class="flex items-center gap-4">
           <span>Made with Astro & Tailwind CSS</span>
         </div>
-      </div>
-      <div class="flex flex-wrap items-center justify-center sm:justify-start gap-x-4 gap-y-1.5 mt-4">
-        <a href="/privacy" class="hover:text-canvas dark:hover:text-ink transition-colors">Privacy Policy</a>
-        <a href="/terms" class="hover:text-canvas dark:hover:text-ink transition-colors">Terms &amp; Conditions</a>
-        <a href="/about" class="hover:text-canvas dark:hover:text-ink transition-colors">About Us</a>
-        <a href="/contact" class="hover:text-canvas dark:hover:text-ink transition-colors">Contact Us</a>
       </div>
     </div>
   </div>

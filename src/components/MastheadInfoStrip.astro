@@ -44,8 +44,12 @@ const currentLanguage = isValidLanguage(rawLanguage) ? rawLanguage : DEFAULT_LAN
       <span id="ticker" hidden class="whitespace-nowrap opacity-80"></span>
     </div>
 
-    <!-- Right: language, saved, theme -->
-    <div class="flex shrink-0 items-center gap-4">
+    <!-- Right: language, desktop only. On phones it sat ~800px off-screen in
+         a scrollbar-less strip; the mobile menu carries it instead. The Saved
+         and theme buttons that used to follow were duplicates (Navbar has the
+         theme toggle, "You" opens /saved), and Saved opened a drawer that
+         only existed on the homepage — a dead button everywhere else. -->
+    <div class="hidden shrink-0 items-center gap-4 lg:flex">
       <label class="flex items-center gap-1.5">
         <span class="hidden opacity-70 sm:inline">Language</span>
         <select
@@ -64,25 +68,6 @@ const currentLanguage = isValidLanguage(rawLanguage) ? rawLanguage : DEFAULT_LAN
           }
         </select>
       </label>
-
-      <button
-        type="button"
-        id="saved-drawer-toggle"
-        aria-label="View saved articles"
-        aria-expanded="false"
-        aria-controls="saved-drawer"
-        class="font-mono-caption cursor-pointer border-none bg-transparent uppercase text-canvas hover:text-primary dark:text-ink"
-      >
-        Saved (<span data-saved-count>0</span>)
-      </button>
-
-      <button
-        type="button"
-        class="theme-toggle-trigger font-mono-caption cursor-pointer border-none bg-transparent uppercase text-canvas hover:text-primary dark:text-ink"
-      >
-        <span class="block dark:hidden">Light</span>
-        <span class="hidden dark:block">Dark</span>
-      </button>
     </div>
   </div>
   <div
@@ -202,15 +187,6 @@ const currentLanguage = isValidLanguage(rawLanguage) ? rawLanguage : DEFAULT_LAN
     updateStripFade();
     stripScroll.addEventListener('scroll', updateStripFade, { passive: true });
     window.addEventListener('resize', updateStripFade);
-
-    // One-time peek nudge, skipped under reduced motion (UI/UX spec §9).
-    const reduced = window.matchMedia('(prefers-reduced-motion: reduce)');
-    if (!reduced.matches && stripScroll.scrollWidth > stripScroll.clientWidth) {
-      setTimeout(() => {
-        stripScroll.scrollTo({ left: 56, behavior: 'smooth' });
-        setTimeout(() => stripScroll.scrollTo({ left: 0, behavior: 'smooth' }), 450);
-      }, 600);
-    }
   }
 
   // Live market indices. The strip stays hidden unless real quotes arrive —
@@ -236,8 +212,4 @@ const currentLanguage = isValidLanguage(rawLanguage) ? rawLanguage : DEFAULT_LAN
     .catch(() => {
       /* stays hidden - never show invented numbers */
     });
-
-  document.getElementById('saved-drawer-toggle')?.addEventListener('click', () => {
-    window.dispatchEvent(new CustomEvent('nz-saved-drawer-toggle'));
-  });
 </script>

@@ -8,8 +8,9 @@ import EmptyState from '../components/shared/EmptyState.astro';
 // P5: "/saved — Saved articles (today: a drawer) — Local store". Promotes
 // the existing drawer's storage to a full page. Reuses window.NZ.getSaved()/
 // toggleSaved(), defined once in Layout.astro and already used by
-// SavedArticlesDrawer.astro and ArticleCard's save buttons — no new storage
-// schema, no server-side persistence.
+// ArticleCard's save buttons — no new storage schema, no server-side
+// persistence. (The homepage-only drawer was removed: this page is the one
+// saved view.)
 //
 // P6 KEEPS THIS A FULL PAGE per the explicit SAVED decision: the BottomNav
 // "You" destination links here rather than replacing it with a drawer-only
@@ -70,7 +71,7 @@ export const prerender = true;
       card.className = 'rounded-sm border border-hairline bg-surface-elevated p-4';
 
       // An unsafe href (article.href is attacker-writable via any XSS on the
-      // origin, per SavedArticlesDrawer.astro's S-12 note) still shows the
+      // origin — audit S-12) still shows the
       // headline; it is just not turned into a clickable link.
       const title = document.createElement(href ? 'a' : 'p');
       title.className = 'mb-2 block text-sm font-semibold text-ink';
