@@ -662,16 +662,22 @@ export class StoryClusterRepository {
    *  the last job that wrote it, and its recency term decays continuously, so
    *  a persisted number is wrong the moment it is written. Computing at read
    *  time over a bounded candidate set is both cheaper and always current. */
-  async listRecentClusters(sinceIso: string, limit = 200): Promise<StoryClusterRecord[]> {
+  async listRecentClusters(
+    sinceIso: string,
+    limit = 200,
+    /** Filtered in SQL, before LIMIT. Filtering after it let ~200 newer
+     *  single-source clusters crowd out every multi-source one. */
+    minSources = 1,
+  ): Promise<StoryClusterRecord[]> {
     const bounded = Math.min(Math.max(Math.trunc(limit), 1), 500);
     const rows = await this.db
       .prepare(
         `SELECT * FROM story_clusters
-         WHERE last_seen_at >= ?
+         WHERE last_seen_at >= ? AND source_count >= ?
          ORDER BY last_seen_at DESC
          LIMIT ?`,
       )
-      .bind(sinceIso, bounded)
+      .bind(sinceIso, minSources, bounded)
       .all<Record<string, unknown>>();
     return rows.results.map(toCluster);
   }

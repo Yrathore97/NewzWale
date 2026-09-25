@@ -745,6 +745,25 @@ d('StoryClusterRepository', () => {
     expect((await repo.listTrending()).map((c) => c.id)).toEqual(['real']);
   });
 
+  // Production defect: /api/v1/trending took the 200 NEWEST clusters and only
+  // then dropped single-source ones. At ~1,400 new clusters a day, almost all
+  // single-source, 200 covered ~3 hours — so the 8 multi-source stories in the
+  // 48h window were never candidates and /trending rendered empty.
+  it('listRecentClusters filters by source count BEFORE the limit', async () => {
+    const repo = new StoryClusterRepository(makeDb());
+    await repo.upsert({ ...cluster('real', 2, 0), lastSeenAt: '2026-08-08T01:00:00Z' });
+    for (let i = 0; i < 250; i++) {
+      const t = new Date(Date.parse('2026-08-08T02:00:00Z') + i * 60_000).toISOString();
+      await repo.upsert({ ...cluster(`solo${i}`, 1, 0), lastSeenAt: t });
+    }
+
+    const got = await repo.listRecentClusters('2026-08-08T00:00:00Z', 200, 2);
+    expect(got.map((c) => c.id)).toEqual(['real']);
+
+    // Default keeps the old meaning: every recent cluster, bounded.
+    expect(await repo.listRecentClusters('2026-08-08T00:00:00Z', 200)).toHaveLength(200);
+  });
+
   it('upsert updates counts rather than duplicating', async () => {
     const repo = new StoryClusterRepository(makeDb());
     await repo.upsert(cluster('c1', 2, 5));

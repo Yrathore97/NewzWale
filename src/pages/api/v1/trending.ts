@@ -5,7 +5,7 @@ import { handle, ok } from '../../../lib/api/response';
 import { limitParam } from '../../../lib/api/query';
 import { requireDbBinding } from '../../../lib/api/bindings';
 import { StoryClusterRepository } from '../../../lib/db/repositories/articles';
-import { rankTrending, TRENDING_HALF_LIFE_HOURS } from '../../../lib/news/read';
+import { rankTrending, TRENDING_HALF_LIFE_HOURS, TRENDING_MIN_SOURCES } from '../../../lib/news/read';
 
 /** GET /api/v1/trending — stories ranked by breadth of independent coverage.
  *
@@ -47,7 +47,7 @@ export const GET: APIRoute = async ({ request, url }) =>
     const now = Date.now();
     const since = new Date(now - WINDOW_HOURS * 60 * 60 * 1000).toISOString();
 
-    const clusters = await new StoryClusterRepository(db).listRecentClusters(since);
+    const clusters = await new StoryClusterRepository(db).listRecentClusters(since, 200, TRENDING_MIN_SOURCES);
     const stories = rankTrending(clusters, now, limitParam(url));
 
     return ok(stories, {
