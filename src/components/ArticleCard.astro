@@ -106,6 +106,18 @@ const headlineSize = isLead
           isLead ? 'aspect-[16/9]' : 'aspect-[16/9]',
         ]}
       >
+        {/* Shown when the publisher's image fails (hotlink block, dead URL,
+            content blocker). Keeps the reserved box — no layout shift — and
+            the Save button, instead of a broken-image glyph in an empty box. */}
+        <div
+          data-card-fallback
+          hidden
+          aria-hidden="true"
+          class="absolute inset-0 flex items-center justify-center bg-gradient-to-br from-surface-card to-surface-soft"
+        >
+          <span data-field="source" class="font-mono-caption px-4 text-center text-mute">{source}</span>
+        </div>
+
         {/* width/height AND aspect-ratio: the attributes give the intrinsic
             ratio, the CSS reserves the box even before the src resolves. */}
         <img
@@ -247,3 +259,27 @@ const headlineSize = isLead
   </div>
 </article>
 </Wrapper>
+
+<script>
+  // One capture-phase listener covers every card, including ones "Load more"
+  // appends later: `error` does not bubble, but it can be captured.
+  function showFallback(img: HTMLImageElement) {
+    img.hidden = true;
+    const fallback = img.parentElement?.querySelector<HTMLElement>('[data-card-fallback]');
+    if (fallback) fallback.hidden = false;
+  }
+
+  document.addEventListener(
+    'error',
+    (e) => {
+      const t = e.target;
+      if (t instanceof HTMLImageElement && t.matches('[data-card-image]')) showFallback(t);
+    },
+    true,
+  );
+
+  // Images that failed before this module ran.
+  for (const img of document.querySelectorAll<HTMLImageElement>('img[data-card-image]')) {
+    if (img.complete && img.getAttribute('src') && img.naturalWidth === 0) showFallback(img);
+  }
+</script>

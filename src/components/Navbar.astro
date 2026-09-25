@@ -2,6 +2,7 @@
 import LogoIcon from './LogoIcon.astro';
 import Dialog from './shared/Dialog.astro';
 import { CATEGORIES, RAIL_TOPICS } from '../lib/news/categories';
+import { LANGUAGES, isValidLanguage, DEFAULT_LANGUAGE } from '../lib/news/languages';
 
 /** Site header.
  *
@@ -33,6 +34,9 @@ const DESTINATIONS = [
 ];
 
 const activeCategory = currentPath.startsWith('/category/') ? currentPath.split('/')[2] : null;
+
+const rawLanguage = Astro.url.searchParams.get('language');
+const currentLanguage = isValidLanguage(rawLanguage) ? rawLanguage : DEFAULT_LANGUAGE;
 
 const linkBase =
   'px-3 py-1.5 text-xs font-medium rounded-full transition-colors duration-200 inline-flex items-center min-h-9';
@@ -222,6 +226,31 @@ const linkIdle = 'text-body hover:text-ink hover:bg-gradient-start';
     }
   </nav>
 
+  <!-- On mobile the masthead's language select sits off-screen at the end of a
+       scrollbar-less strip, so the 13-language feed was effectively
+       undiscoverable on phones. Same behaviour, bound by the script below. -->
+  <div class="mt-4 border-t border-hairline-soft pt-3">
+    <label for="language-select-mobile" class="font-mono-caption block px-3.5 pb-1 text-mute">
+      Headline language
+    </label>
+    <div class="px-3.5">
+      <select
+        id="language-select-mobile"
+        data-language-select
+        class="min-h-11 w-full cursor-pointer rounded-md border border-hairline bg-surface-elevated px-3 text-sm text-ink focus:outline-none focus:ring-2 focus:ring-primary-strong"
+      >
+        {
+          LANGUAGES.map((lang) => (
+            <option value={lang.code} selected={lang.code === currentLanguage}>
+              {lang.name}
+            </option>
+          ))
+        }
+      </select>
+      <p class="mt-1 text-xs text-mute">Changes news headlines only; menus stay in English.</p>
+    </div>
+  </div>
+
   <div class="mt-4 border-t border-hairline-soft pt-3">
     <p class="font-mono-caption px-3.5 pb-1 text-mute">Show sections for</p>
     {
@@ -290,26 +319,28 @@ const linkIdle = 'text-body hover:text-ink hover:bg-gradient-start';
     });
   }
 
-  // Language selector lives in MastheadInfoStrip; navigating rather than
-  // refetching keeps the choice in the URL, so it is shareable and survives a
-  // reload.
-  const langSelect = document.getElementById('language-select') as HTMLSelectElement | null;
-  langSelect?.addEventListener('change', () => {
-    const code = langSelect.value;
-    const name = langSelect.options[langSelect.selectedIndex]?.text ?? code;
+  // Language selectors: the masthead's, and the mobile menu's copy. Navigating
+  // rather than refetching keeps the choice in the URL, so it is shareable and
+  // survives a reload.
+  for (const langSelect of document.querySelectorAll('[data-language-select]')) {
+    if (!(langSelect instanceof HTMLSelectElement)) continue;
+    langSelect.addEventListener('change', () => {
+      const code = langSelect.value;
+      const name = langSelect.options[langSelect.selectedIndex]?.text ?? code;
 
-    localStorage.setItem('userLanguage', code);
-    localStorage.setItem('userLanguageName', name);
+      localStorage.setItem('userLanguage', code);
+      localStorage.setItem('userLanguageName', name);
 
-    window.dispatchEvent(
-      new CustomEvent('language-changed', { detail: { langCode: code, langName: name } }),
-    );
+      window.dispatchEvent(
+        new CustomEvent('language-changed', { detail: { langCode: code, langName: name } }),
+      );
 
-    const url = new URL(window.location.href);
-    if (code === 'en') url.searchParams.delete('language');
-    else url.searchParams.set('language', code);
-    window.location.assign(url.toString());
-  });
+      const url = new URL(window.location.href);
+      if (code === 'en') url.searchParams.delete('language');
+      else url.searchParams.set('language', code);
+      window.location.assign(url.toString());
+    });
+  }
 
   // Category strip edge fade: hidden once scrolled to the end, or if there is
   // no overflow, so the hint never lies about there being more.
