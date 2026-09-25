@@ -25,6 +25,20 @@ describe('normalizeNewsData', () => {
     expect(out[0].category).toBe('business');
   });
 
+  // Live defect: a Jaipur mayoral-election story rendered as "Lifestyle"
+  // because the first of several upstream tags was taken blindly.
+  it('labels a multi-tagged story with its most specific news category', () => {
+    const base = { article_id: 'a', title: 'T', link: 'https://example.com/a' };
+    const cat = (category: unknown) =>
+      normalizeNewsData({ results: [{ ...base, category }] })[0].category;
+
+    expect(cat(['lifestyle', 'politics'])).toBe('politics');
+    expect(cat(['top', 'other', 'sports'])).toBe('sports');
+    expect(cat(['lifestyle'])).toBe('lifestyle'); // single tag: kept as-is
+    expect(cat(['top'])).toBe('top');
+    expect(cat(undefined)).toBe('top');
+  });
+
   it('drops entries with no title or link', () => {
     const raw = { status: 'success', results: [{ article_id: 'x', title: null, link: null }] };
     expect(normalizeNewsData(raw)).toHaveLength(0);
