@@ -29,6 +29,11 @@ export const LANGUAGES: Language[] = [
   { code: 'or', name: 'ଓଡ଼ିଆ (Odia)', dir: 'ltr' },
   { code: 'as', name: 'অসমীয়া (Assamese)', dir: 'ltr' },
   { code: 'ur', name: 'اردو (Urdu)', dir: 'rtl' },
+  // Salvaged from the retired Aug 6 redesign branch (56f052c), which checked
+  // all 22 Eighth Schedule languages against NewsData: Nepali is the only one
+  // not already listed that the API both recognises and returns results for.
+  // Re-verified against production before shipping - see PROGRESS.md.
+  { code: 'ne', name: 'नेपाली (Nepali)', dir: 'ltr' },
 ];
 
 const CODES = new Set(LANGUAGES.map((l) => l.code));

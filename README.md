@@ -4,7 +4,7 @@
 
 **Only Facts News**
 
-Live Indian news, in 13 languages — plus a fact-checker that never guesses.
+Live Indian news, in 14 languages — plus a fact-checker that never guesses.
 
 [![CI](https://github.com/Yrathore97/NewzWale/actions/workflows/deploy.yml/badge.svg)](https://github.com/Yrathore97/NewzWale/actions/workflows/deploy.yml)
 [![Built with Astro](https://img.shields.io/badge/built%20with-Astro-BC52EE?logo=astro&logoColor=white)](https://astro.build)
@@ -29,7 +29,7 @@ Full write-up of what it does and how it was built: [`docs/WEBSITE-DOCUMENTATION
 
 | | |
 |---|---|
-| 📰 **Live headlines** | 8 categories, 13 languages, cached and RSS-backed for resilience |
+| 📰 **Live headlines** | 8 categories, 14 languages, cached and RSS-backed for resilience |
 | ✅ **Fact Check Explorer** | Certified lookup and web evidence retrieved in parallel; a deterministic gate has the last word and can only downgrade what the model proposed |
 | 🕘 **Fact-check history** | Every check you run, kept on your device — capped at 50, filterable by verdict, never synced |
 | 🔍 **Search** | Full-text over indexed articles and fact-checks, with a `LIKE` fallback for scripts FTS5 tokenises poorly |

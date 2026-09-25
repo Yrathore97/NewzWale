@@ -12,7 +12,7 @@ NewzWale is:
 
 - Astro v7, SSR (`output: 'server'`), TypeScript
 - Hosted on Cloudflare Workers (`@astrojs/cloudflare`)
-- A live Indian news feed (13 languages) + an AI-assisted fact-checker
+- A live Indian news feed (14 languages) + an AI-assisted fact-checker
 - Six-verdict fact-check model: `true`, `false`, `partly_true`, `misleading`,
   `unverified`, `needs_context` — evidence-gated, never a guess
 - A PWA: installable, offline shell, explicit-allowlist service worker
