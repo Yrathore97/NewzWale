@@ -58,6 +58,47 @@ Current production identity: **`pipelineVersion 7 / evidenceVersion 6`**
   now discloses it alongside Google Analytics (a factual correction: the
   script demonstrably loads).
 
+- **PR #52 — stale-while-revalidate + category labels.** After each 20-min
+  KV expiry the next reader waited 2-3s on the provider although a 24h stale
+  copy was in KV. `cached()` now takes `{ waitUntil }` (only `/api/news`
+  passes it): stale is returned at once, refresh runs behind the response,
+  a 60s `:refreshing` KV lock stops a burst spending NewsData quota.
+  Verified in prod by deleting the fresh `news:v2:top:hi:first` key: stale
+  served in ~0.35s, lock written, fresh key rewritten in the background.
+  `normalizeNewsData` now prefers a specific tag over catch-alls (`top`,
+  `other`, `lifestyle`, `food`, `tourism`) — an election story tagged
+  `['lifestyle','politics']` had rendered as "Lifestyle".
+
+### Wrap-up: still open (decisions or credentials, not defects)
+
+- **S-10 GA consent** and **S-11 CSP enforcement** (needs build-time hashes
+  for the inline scripts) — unchanged, see CLAUDE.md §17.
+- **Trending is thin** (8 stories at time of writing): the SQL bug is fixed;
+  depth now depends on ingest breadth (more sources/categories), which is
+  quota-bound — re-measure before widening the cron.
+- **Cloudflare plugin installed** (`cloudflare@cloudflare`, user scope); its
+  API MCP server needs an interactive `/mcp` OAuth before use.
+- **Branches left alone on purpose:** 8 remote branches already merged into
+  `main` (`claude/add-website-documentation`, `claude/fix-factcheck-tab-highlight`,
+  `claude/fix-masthead-footer-contrast`, `claude/newzwale-homepage-redesign-3174d1`,
+  `claude/point-at-custom-domain`, `claude/top-bar-navigation-c4b6e6`,
+  `claude/update-readme`, `rebuild/two-interface`) and one UNMERGED branch,
+  `claude/news-website-redesign-c3de89` (Aug 6, 8 commits) — the owner's
+  call whether to delete or salvage.
+
+### Environment traps met this session
+
+- `wrangler` OAuth expires; symptom is "non-interactive … CLOUDFLARE_API_TOKEN"
+  from `astro dev`, `npm run build` AND `wrangler d1`. Fix: `npx wrangler login`.
+- A fresh worktree's LOCAL D1 has no tables, so `/api/v1/*` 500s under
+  `astro dev` ("no such table"). Not a code defect; use prod or apply
+  migrations locally.
+- After a dependency upgrade, `astro dev` can crash on a stale optimized-dep
+  chunk; fixed here by the matching `@astrojs/cloudflare`, not by clearing
+  `node_modules/.vite` alone.
+- KV reads are edge-cached ~60s: a deleted key keeps "hitting" for up to a
+  minute, so wait before concluding a cache change did nothing.
+
 ---
 
 ## Status — Spurious contradictions eliminated; live at p6/e6 via autopilot
