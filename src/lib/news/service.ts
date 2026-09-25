@@ -24,7 +24,7 @@
  *  Behaviour is unchanged from the route this was lifted from: same cache key,
  *  same TTL, same fallback order, same stale-on-error semantics. */
 
-import { cached, newsCacheKey } from '../cache';
+import { cached, newsCacheKey, type CachedOptions } from '../cache';
 import { DEFAULT_CATEGORY, isValidCategory } from './categories';
 import { DEFAULT_LANGUAGE, isValidLanguage } from './languages';
 import { fetchFromChain, type ProviderKeys } from './providers';
@@ -80,6 +80,8 @@ export async function getNewsPage(
   kv: KVNamespace,
   query: NewsQuery,
   keys: ProviderKeys,
+  /** Pass the Worker's waitUntil for stale-while-revalidate. */
+  cacheOpts: CachedOptions = {},
 ): Promise<NewsResult> {
   const { category, language, page } = resolveNewsQuery(query);
   const key = newsCacheKey(category, language, page);
@@ -93,7 +95,7 @@ export async function getNewsPage(
     const chain = await fetchFromChain({ category, language, page }, keys, DEFAULT_LANGUAGE);
     providerId = chain.providerId;
     return { articles: chain.articles, nextPage: chain.nextPage };
-  });
+  }, cacheOpts);
 
   return {
     articles: result?.articles ?? [],

@@ -4,6 +4,17 @@ import { DEFAULT_LANGUAGE } from './languages';
 
 const ENDPOINT = 'https://newsdata.io/api/1/latest';
 
+/** Tags NewsData attaches broadly. When a story carries one of these AND a
+ *  specific tag, the specific one is the honest label: an election result
+ *  tagged ['lifestyle', 'politics'] rendered as "Lifestyle". */
+const CATCH_ALL = new Set(['top', 'other', 'lifestyle', 'food', 'tourism']);
+
+function pickCategory(tags: unknown): string {
+  if (!Array.isArray(tags) || tags.length === 0) return 'top';
+  const names = tags.map(String);
+  return names.find((t) => !CATCH_ALL.has(t)) ?? names[0] ?? 'top';
+}
+
 export function normalizeNewsData(raw: any): Article[] {
   const results = Array.isArray(raw?.results) ? raw.results : [];
   return results
@@ -15,7 +26,7 @@ export function normalizeNewsData(raw: any): Article[] {
       summary: String(r.description ?? ''),
       imageUrl: r.image_url ? String(r.image_url) : null,
       source: String(r.source_id ?? 'unknown'),
-      category: Array.isArray(r.category) ? String(r.category[0] ?? 'top') : 'top',
+      category: pickCategory(r.category),
       publishedAt: String(r.pubDate ?? ''),
     }));
 }

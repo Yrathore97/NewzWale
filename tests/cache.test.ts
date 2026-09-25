@@ -54,4 +54,59 @@ describe('cached', () => {
     const out = await cached(kv, 'k', 60, async () => { throw new Error('boom'); });
     expect(out).toEqual([{ id: 'old' }]);
   });
+
+  describe('stale-while-revalidate', () => {
+    // The 2-3s first load after each 20-minute expiry was the reader waiting
+    // on the upstream provider while a perfectly good stale copy sat in KV.
+    it('returns stale immediately and refreshes in the background', async () => {
+      const store: Record<string, string> = { 'k:stale': JSON.stringify(['old']) };
+      const kv = fakeKV(store);
+      const background: Promise<unknown>[] = [];
+      let release!: () => void;
+      const gate = new Promise<void>((r) => (release = r));
+      const produce = vi.fn(async () => { await gate; return ['new']; });
+
+      const out = await cached(kv, 'k', 60, produce, { waitUntil: (p) => background.push(p) });
+
+      expect(out).toEqual(['old']);          // did not wait on the producer
+      expect(background).toHaveLength(1);
+      release();
+      await Promise.all(background);
+      expect(JSON.parse(store['k'])).toEqual(['new']);
+      expect(JSON.parse(store['k:stale'])).toEqual(['new']);
+    });
+
+    // NewsData's free tier is 200 requests/day, shared with the cron. A burst
+    // of readers on an expired key must not each spend one.
+    it('does not start a second refresh while one is in flight', async () => {
+      const kv = fakeKV({ 'k:stale': JSON.stringify(['old']) });
+      const produce = vi.fn(async () => ['new']);
+      const bg: Promise<unknown>[] = [];
+      const opts = { waitUntil: (p: Promise<unknown>) => bg.push(p) };
+      await cached(kv, 'k', 60, produce, opts);
+      // Second reader arrives before the first refresh has written 'k'.
+      await cached(kv, 'k', 60, async () => ['newer'], opts);
+      await Promise.all(bg);
+      expect(produce).toHaveBeenCalledTimes(1);
+      expect(bg).toHaveLength(1);
+    });
+
+    it('a failed background refresh keeps serving stale', async () => {
+      const store: Record<string, string> = { 'k:stale': JSON.stringify(['old']) };
+      const kv = fakeKV(store);
+      const bg: Promise<unknown>[] = [];
+      const out = await cached(kv, 'k', 60, async () => { throw new Error('boom'); }, {
+        waitUntil: (p) => bg.push(p),
+      });
+      await Promise.all(bg); // must not reject
+      expect(out).toEqual(['old']);
+      expect(JSON.parse(store['k:stale'])).toEqual(['old']);
+    });
+
+    it('without waitUntil, behaviour is unchanged (waits for fresh)', async () => {
+      const kv = fakeKV({ 'k:stale': JSON.stringify(['old']) });
+      const out = await cached(kv, 'k', 60, async () => ['new']);
+      expect(out).toEqual(['new']);
+    });
+  });
 });
