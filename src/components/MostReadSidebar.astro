@@ -42,7 +42,9 @@ const { trending } = Astro.props;
       ))}
     </div>
 
-    <div class="border-t border-hairline mt-4.5 pt-4">
+    {/* Desktop only: the one topic control per device. On phones this sat at
+        the bottom of a ~16,000px page; the mobile menu carries it there. */}
+    <div class="mt-4.5 hidden border-t border-hairline pt-4 lg:block">
       <h3 class="text-xs font-semibold text-ink mb-2.5">Your topics</h3>
       <div class="flex flex-wrap gap-1.5">
         {RAIL_TOPICS.map((topic) => (

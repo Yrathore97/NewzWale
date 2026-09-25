@@ -2,7 +2,6 @@
 import Layout from '../layouts/Layout.astro';
 import Navbar from '../components/Navbar.astro';
 import MastheadInfoStrip from '../components/MastheadInfoStrip.astro';
-import SavedArticlesDrawer from '../components/SavedArticlesDrawer.astro';
 import HeroMesh from '../components/HeroMesh.astro';
 import LeadStory from '../components/LeadStory.astro';
 import CategoryRail from '../components/CategoryRail.astro';
@@ -49,7 +48,6 @@ const shownUrls = [lead?.url, ...secondary.map((a) => a.url)].filter(
 >
   <Navbar />
   <MastheadInfoStrip />
-  <SavedArticlesDrawer />
   <main id="main" class="flex-1">
     <HeroMesh />
 

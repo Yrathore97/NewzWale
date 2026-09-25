@@ -84,17 +84,6 @@ const linkIdle = 'text-body hover:text-ink hover:bg-gradient-start';
 
       <button
         type="button"
-        data-nz-dialog-toggle="topics-dialog"
-        aria-haspopup="dialog"
-        aria-expanded="false"
-        aria-controls="topics-dialog"
-        class="ml-1 inline-flex min-h-9 cursor-pointer items-center rounded-full bg-secondary-bg px-3 py-1.5 text-xs font-medium text-ink transition-colors duration-200 hover:bg-secondary-pressed"
-      >
-        Customize topics
-      </button>
-
-      <button
-        type="button"
         class="theme-toggle-trigger ml-1 inline-flex min-h-9 cursor-pointer items-center rounded-full px-3 py-1.5 text-xs font-medium text-body hover:bg-gradient-start hover:text-ink"
       >
         <span class="block dark:hidden">Dark mode</span>
@@ -102,26 +91,9 @@ const linkIdle = 'text-body hover:text-ink hover:bg-gradient-start';
       </button>
     </nav>
 
-    <!-- Mobile: search shortcut + menu. 44x44 targets. -->
+    <!-- Mobile: theme + menu. Search lives in BottomNav, so no second copy
+         here. 44x44 targets. -->
     <div class="flex items-center gap-1 lg:hidden">
-      <a
-        href="/search"
-        aria-label="Search news and fact checks"
-        class="inline-flex h-11 w-11 items-center justify-center rounded-md text-ink hover:bg-surface-card"
-      >
-        <svg
-          class="h-5 w-5"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          stroke-width="2"
-          aria-hidden="true"
-        >
-          <circle cx="11" cy="11" r="7"></circle>
-          <path stroke-linecap="round" d="m20 20-3.5-3.5"></path>
-        </svg>
-      </a>
-
       <button
         type="button"
         class="theme-toggle-trigger inline-flex h-11 w-11 cursor-pointer items-center justify-center rounded-md text-ink hover:bg-surface-card"
@@ -166,7 +138,7 @@ const linkIdle = 'text-body hover:text-ink hover:bg-gradient-start';
        for magnifier and screen-reader users (audit A-08). -->
   <div
     id="category-strip-wrap"
-    class="relative w-full border-t border-hairline-soft bg-surface-soft transition-[max-height,opacity] duration-300 ease-out"
+    class="relative max-h-12 w-full border-t border-hairline-soft bg-surface-soft transition-[max-height,opacity] duration-300 ease-out"
   >
     <nav
       id="category-strip"
@@ -205,31 +177,16 @@ const linkIdle = 'text-body hover:text-ink hover:bg-gradient-start';
 </header>
 
 <!-- Mobile menu. Escape, focus trap, focus restoration and scroll lock all
-     come from the shared Dialog. -->
-<Dialog id="mobile-menu" title="Menu" variant="drawer-left" class="lg:hidden">
-  <nav aria-label="Mobile" class="flex flex-col gap-1">
-    {
-      DESTINATIONS.map((d) => (
-        <a
-          href={d.href}
-          aria-current={isCurrent(d.href, d.exact) ? 'page' : undefined}
-          class:list={[
-            'flex min-h-11 items-center rounded-md px-3.5 text-sm font-semibold',
-            isCurrent(d.href, d.exact)
-              ? 'bg-primary-strong text-on-primary shadow-stacked-sm'
-              : 'text-ink hover:bg-surface-card',
-          ]}
-        >
-          {d.label}
-        </a>
-      ))
-    }
-  </nav>
+     come from the shared Dialog.
 
-  <!-- On mobile the masthead's language select sits off-screen at the end of a
-       scrollbar-less strip, so the 13-language feed was effectively
-       undiscoverable on phones. Same behaviour, bound by the script below. -->
-  <div class="mt-4 border-t border-hairline-soft pt-3">
+     Holds only what BottomNav does not: the five destinations live there,
+     always visible, so repeating them here was a second menu for the same
+     links. What remains is language, homepage sections and the full category
+     list (the strip above scrolls sideways and hides on scroll). -->
+<Dialog id="mobile-menu" title="Menu" variant="drawer-left" class="lg:hidden">
+  <!-- The masthead's language select is desktop-only (it sat off-screen on
+       phones). Same behaviour, bound by the script below. -->
+  <div>
     <label for="language-select-mobile" class="font-mono-caption block px-3.5 pb-1 text-mute">
       Headline language
     </label>
@@ -252,7 +209,7 @@ const linkIdle = 'text-body hover:text-ink hover:bg-gradient-start';
   </div>
 
   <div class="mt-4 border-t border-hairline-soft pt-3">
-    <p class="font-mono-caption px-3.5 pb-1 text-mute">Show sections for</p>
+    <p class="font-mono-caption px-3.5 pb-1 text-mute">Homepage sections</p>
     {
       RAIL_TOPICS.map((topic) => (
         <label class="flex min-h-11 cursor-pointer items-center gap-2.5 px-3.5 text-sm text-ink">
@@ -282,20 +239,6 @@ const linkIdle = 'text-body hover:text-ink hover:bg-gradient-start';
       ))
     }
   </div>
-</Dialog>
-
-<!-- Topics chooser (desktop). Was an unlabelled role="menu" popover with no
-     keyboard model and no focus return (audit A-04). -->
-<Dialog id="topics-dialog" title="Customize topics" variant="center" class="hidden lg:block">
-  <p class="mb-3 text-sm text-body">Choose which sections appear on the homepage.</p>
-  {
-    RAIL_TOPICS.map((topic) => (
-      <label class="flex min-h-11 cursor-pointer items-center gap-2.5 text-sm text-ink">
-        <input type="checkbox" data-topic-toggle={topic.label} class="accent-primary-strong" />
-        {topic.label}
-      </label>
-    ))
-  }
 </Dialog>
 
 <style>
@@ -352,20 +295,25 @@ const linkIdle = 'text-body hover:text-ink hover:bg-gradient-start';
         categoryStrip.scrollLeft + categoryStrip.clientWidth >= categoryStrip.scrollWidth - 1;
       categoryFade.style.opacity = atEnd ? '0' : '1';
     };
+    // The current category can sit past the right edge on a phone ("Health"
+    // at x=584 on a 375px screen), so the reader could not see where they
+    // were. Centre it instead. This replaced a load-time "peek" animation
+    // that scrolled the strip on its own, which read as the page jumping.
+    const active = categoryStrip.querySelector<HTMLElement>('[aria-current="page"]');
+    const centreActive = () => {
+      if (!active) return;
+      categoryStrip.scrollLeft =
+        active.offsetLeft - (categoryStrip.clientWidth - active.offsetWidth) / 2;
+      updateFade();
+    };
+    centreActive();
+    // Again once web fonts land: chips widen, and a position computed against
+    // the fallback font stops ~20px short of the last chip.
+    document.fonts?.ready.then(centreActive);
+
     updateFade();
     categoryStrip.addEventListener('scroll', updateFade, { passive: true });
     window.addEventListener('resize', updateFade);
-
-    // One-time peek nudge — a far stronger scroll affordance than a static
-    // fade on touch screens. Skipped entirely under reduced motion, per §9 of
-    // the UI/UX spec.
-    const reduced = window.matchMedia('(prefers-reduced-motion: reduce)');
-    if (!reduced.matches && categoryStrip.scrollWidth > categoryStrip.clientWidth) {
-      setTimeout(() => {
-        categoryStrip.scrollTo({ left: 56, behavior: 'smooth' });
-        setTimeout(() => categoryStrip.scrollTo({ left: 0, behavior: 'smooth' }), 450);
-      }, 600);
-    }
   }
 
   // Collapse only the category strip on scroll-down, not the whole header.
@@ -376,7 +324,23 @@ const linkIdle = 'text-body hover:text-ink hover:bg-gradient-start';
   if (stripWrap) {
     let lastY = window.scrollY;
     let ticking = false;
+    let hidden = false;
     const THRESHOLD = 120;
+    // Ignore movements smaller than this. Toggling on every pixel made the
+    // strip flicker on momentum scrolling and when a finger rested on screen.
+    const JITTER = 12;
+
+    const setHidden = (hide: boolean) => {
+      if (hide === hidden) return;
+      hidden = hide;
+      // Swap rather than stack the two max-heights: with both present the
+      // winner depends on stylesheet order. A definite 48px (not `none`) is
+      // what lets the collapse animate instead of snapping shut.
+      stripWrap.classList.toggle('max-h-12', !hide);
+      stripWrap.classList.toggle('max-h-0', hide);
+      stripWrap.classList.toggle('opacity-0', hide);
+      stripWrap.classList.toggle('overflow-hidden', hide);
+    };
 
     window.addEventListener(
       'scroll',
@@ -385,11 +349,13 @@ const linkIdle = 'text-body hover:text-ink hover:bg-gradient-start';
         ticking = true;
         requestAnimationFrame(() => {
           const y = window.scrollY;
-          const hide = y > lastY && y > THRESHOLD;
-          stripWrap.classList.toggle('max-h-0', hide);
-          stripWrap.classList.toggle('opacity-0', hide);
-          stripWrap.classList.toggle('overflow-hidden', hide);
-          lastY = y;
+          if (y <= THRESHOLD) {
+            setHidden(false);
+            lastY = y;
+          } else if (Math.abs(y - lastY) >= JITTER) {
+            setHidden(y > lastY);
+            lastY = y;
+          }
           ticking = false;
         });
       },
