@@ -236,6 +236,27 @@ const headlineSize = isLead
             <span class="sr-only" data-field="title-sr">{title}</span>
           </button>
         ) : (
+          <div class="flex items-center gap-1">
+          {/* The image box carries Save; a card with no image has no image box,
+              so it had no Save at all. This copy shows only then (CSS below),
+              and Layout's delegated handler keeps both in sync by href. */}
+          <button
+            type="button"
+            data-card-save
+            data-card-save-inline
+            data-save-href={asTemplate ? undefined : article.url}
+            data-save-headline={asTemplate ? undefined : article.title}
+            aria-pressed="false"
+            class="save-toggle-btn inline-flex h-11 w-11 cursor-pointer items-center justify-center rounded-full text-ink transition-colors hover:text-primary-strong"
+          >
+            <svg class="h-[18px] w-[18px]" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M6 4h12a1 1 0 0 1 1 1v15l-7-4-7 4V5a1 1 0 0 1 1-1z" />
+            </svg>
+            <span class="sr-only">
+              <span data-save-label>Save</span>
+              <span data-field="title-sr">{title}</span>
+            </span>
+          </button>
           <Tag
             data-card-link
             href={href ?? undefined}
@@ -253,12 +274,22 @@ const headlineSize = isLead
               />
             </svg>
           </Tag>
+          </div>
         )
       }
     </div>
   </div>
 </article>
 </Wrapper>
+
+<style is:global>
+  /* One Save per card: the inline copy only when the image box is absent.
+     :has() rather than a server-side branch, so "Load more" clones (whose
+     image is decided client-side) get the same rule. */
+  .article-card:has([data-card-media]:not([hidden])) [data-card-save-inline] {
+    display: none;
+  }
+</style>
 
 <script>
   // One capture-phase listener covers every card, including ones "Load more"
