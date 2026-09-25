@@ -9,6 +9,11 @@
  *    BROWSER-SIDE, and therefore in scope for CSP
  *      www.googletagmanager.com   gtag.js                Layout.astro:41
  *      www.google-analytics.com   GA beacons             (gtag.js sends here)
+ *      static.cloudflareinsights.com  Web Analytics beacon.min.js - injected
+ *                                 at the edge by Cloudflare, so it is NOT in
+ *                                 src/; found in the live page's CSP reports
+ *      cloudflareinsights.com     Web Analytics RUM beacons (beacon.min.js
+ *                                 sends here)
  *      <any https>                publisher thumbnails   ArticleCard.astro:27
  *
  *    REMOVED IN P6
@@ -56,7 +61,7 @@ export function buildCsp({ reportOnly = true, reportUri }: CspOptions = {}): str
     // The real fix is build-time SHA-256 hashes for those six blocks, which
     // needs an integration hook. Until then this directive is why the policy
     // ships Report-Only: it is a measurement tool, not yet an XSS control.
-    `script-src 'self' 'unsafe-inline' https://www.googletagmanager.com`,
+    `script-src 'self' 'unsafe-inline' https://www.googletagmanager.com https://static.cloudflareinsights.com`,
 
     // Tailwind emits a stylesheet, but inline style attributes are used for
     // dynamic values (e.g. the saved-articles drawer transform), so
@@ -72,7 +77,7 @@ export function buildCsp({ reportOnly = true, reportUri }: CspOptions = {}): str
     // SVG placeholders.
     "img-src 'self' data: https:",
 
-    "connect-src 'self' https://www.google-analytics.com",
+    "connect-src 'self' https://www.google-analytics.com https://cloudflareinsights.com",
 
     // Nothing in this application embeds or is embedded.
     "frame-ancestors 'none'",

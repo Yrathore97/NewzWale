@@ -43,11 +43,20 @@ Current production identity: **`pipelineVersion 7 / evidenceVersion 6`**
     category is centred (re-run after `document.fonts.ready`); hide-on-scroll
     ignores <12px movements and animates from a definite `max-h-12`.
 
-**Still open (decisions, not defects):** /trending is empty — the cluster
-threshold (`cluster.ts`, Jaccard ≥ 0.75, ≥3 shared tokens) almost never yields
-the 2 independent sources trending requires at current ingest volume; the
-Cloudflare Insights beacon is not in CSP `script-src` and will break when CSP
-is enforced; imageless cards have no Save button.
+- **Trending was empty because of a query bug, not thin data.**
+  `listRecentClusters` took the 200 NEWEST clusters and `rankTrending` only
+  then dropped single-source ones. ~1,400 clusters/day, almost all
+  single-source, so 200 covered ~3h: measured in prod, 8 multi-source stories
+  in the 48h window and 0 of them in the top 200. `source_count >= ?` now runs
+  in SQL before LIMIT (regression test in `tests/db/repositories.test.ts`).
+  The clustering threshold and the 2-source floor are unchanged.
+- Imageless cards got a Save button (bottom row; shown via `:has()` only when
+  the image box is absent, so every card has exactly one).
+- CSP now allows Cloudflare Web Analytics (`static.cloudflareinsights.com`
+  script, `cloudflareinsights.com` connect). It is injected at the edge, not
+  from `src/`, and would have broken silently once CSP is enforced. /privacy
+  now discloses it alongside Google Analytics (a factual correction: the
+  script demonstrably loads).
 
 ---
 
