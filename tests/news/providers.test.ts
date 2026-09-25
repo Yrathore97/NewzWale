@@ -3,6 +3,7 @@ import {
   resolveChain,
   fetchFromChain,
   PROVIDERS,
+  newsDataProvider,
   type NewsProvider,
 } from '../../src/lib/news/providers';
 import type { NewsPage } from '../../src/lib/news/types';
@@ -139,5 +140,63 @@ describe('fetchFromChain', () => {
     const spy = vi.spyOn(later, 'fetchPage');
     await fetchFromChain({}, {}, 'en', [stub('first'), later]);
     expect(spy).not.toHaveBeenCalled();
+  });
+});
+
+// Salvaged from the Aug 6 branch (28564f5): NewsData measured ~40% success
+// from Worker egress vs 100% from a plain client, same key, same time.
+describe('newsDataProvider retry', () => {
+  const ok = { status: 'success', results: [{ article_id: '1', title: 'T', link: 'https://e.com/1' }] };
+  const res = (status: number, body: unknown = {}) =>
+    new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } });
+
+  it('retries a transient failure and succeeds', async () => {
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(res(503))
+      .mockRejectedValueOnce(new TypeError('network'))
+      .mockResolvedValueOnce(res(200, ok));
+    vi.stubGlobal('fetch', fetchMock);
+    try {
+      const page = await newsDataProvider.fetchPage({}, { newsdata: 'k' });
+      expect(page.articles).toHaveLength(1);
+      expect(fetchMock).toHaveBeenCalledTimes(3);
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it('gives up after 3 attempts so the chain can fall through', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(res(503));
+    vi.stubGlobal('fetch', fetchMock);
+    try {
+      await expect(newsDataProvider.fetchPage({}, { newsdata: 'k' })).rejects.toThrow();
+      expect(fetchMock).toHaveBeenCalledTimes(3);
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  // A bad key, exhausted plan or rate limit (4xx) will not clear in 300ms;
+  // retrying would only spend time and, for 429, more of the daily quota.
+  it.each([401, 429])('does not retry a %i', async (status) => {
+    const fetchMock = vi.fn().mockResolvedValue(res(status));
+    vi.stubGlobal('fetch', fetchMock);
+    try {
+      await expect(newsDataProvider.fetchPage({}, { newsdata: 'k' })).rejects.toThrow();
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it('does not retry an empty result (a real empty feed, not flakiness)', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(res(200, { status: 'success', results: [] }));
+    vi.stubGlobal('fetch', fetchMock);
+    try {
+      await expect(newsDataProvider.fetchPage({}, { newsdata: 'k' })).rejects.toThrow('empty');
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+    } finally {
+      vi.unstubAllGlobals();
+    }
   });
 });
